@@ -1,0 +1,49 @@
+# ---- Reference clones (study material, NOT part of this project) ----
+/playwright/
+/botcity-framework-web-python/
+
+# ---- Workflow research temp files ----
+_synthesis.tmp.md
+_report_*.tmp.md
+*.tmp.md
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+build/
+dist/
+wheels/
+*.egg
+
+# ---- Virtualenvs / tooling ----
+.venv/
+venv/
+.env
+.python-version
+uv.lock
+
+# ---- Caches ----
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+.tox/
+.nox/
+
+# ---- Drivers / browser artifacts produced at runtime ----
+/.visus/
+downloads/
+*.trace.zip
+
+# ---- Editors / OS ----
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
