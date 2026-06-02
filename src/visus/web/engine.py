@@ -12,7 +12,7 @@ class Engine(str, Enum):
     EDGE_IE = "edge_ie"
 
     @classmethod
-    def from_str(cls, value: "Engine | str") -> "Engine":
+    def from_str(cls, value: Engine | str) -> Engine:
         if isinstance(value, Engine):
             return value
         try:

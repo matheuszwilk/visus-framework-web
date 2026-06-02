@@ -1,6 +1,7 @@
 from dataclasses import FrozenInstanceError
 
 import pytest
+
 from visus.web.backends.base import (
     Backend,
     BrowserConfig,
@@ -13,30 +14,46 @@ from visus.web.engine import Engine
 
 class _FakePage:
     def goto(self, url, *, wait_until, timeout_ms): ...
-    def current_url(self): return ""
-    def title(self): return ""
-    def content(self): return ""
+    def current_url(self):
+        return ""
+
+    def title(self):
+        return ""
+
+    def content(self):
+        return ""
+
     def reload(self, *, timeout_ms): ...
     def go_back(self, *, timeout_ms): ...
     def go_forward(self, *, timeout_ms): ...
     def close(self): ...
-    def is_closed(self): return False
+    def is_closed(self):
+        return False
 
 
 class _FakeContext:
-    def new_page(self): return _FakePage()
-    def pages(self): return []
+    def new_page(self):
+        return _FakePage()
+
+    def pages(self):
+        return []
+
     def close(self): ...
 
 
 class _FakeBrowser:
-    def new_context(self): return _FakeContext()
-    def contexts(self): return []
+    def new_context(self):
+        return _FakeContext()
+
+    def contexts(self):
+        return []
+
     def dispose(self): ...
 
 
 class _FakeBackend:
-    def launch(self, config, *, headless): return _FakeBrowser()
+    def launch(self, config, *, headless):
+        return _FakeBrowser()
 
 
 class _NotAnything:

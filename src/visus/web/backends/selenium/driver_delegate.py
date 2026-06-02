@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
+from typing import cast
+
 from selenium.common.exceptions import (
     NoSuchWindowException,
     TimeoutException,
     WebDriverException,
 )
+from selenium.webdriver.remote.webdriver import WebDriver
 from selenium.webdriver.support.ui import WebDriverWait
 
 from visus.web import errors
+from visus.web.backends.base import PageDelegate
 
 
 def translate_exc(exc: Exception) -> errors.VisusWebError:
@@ -26,7 +30,7 @@ def translate_exc(exc: Exception) -> errors.VisusWebError:
 class SeleniumPageDelegate:
     """One browser window handle. Activates its window before each operation."""
 
-    def __init__(self, driver: object, handle: str) -> None:
+    def __init__(self, driver: WebDriver, handle: str) -> None:
         self._driver = driver
         self._handle = handle
         self._closed = False
@@ -53,7 +57,7 @@ class SeleniumPageDelegate:
         # this by asking the page for its *actual* document URL, which is the
         # canonical chrome-error://chromewebdata/ for all such error pages.
         try:
-            doc_url: str = self._driver.execute_script("return document.URL")
+            doc_url: str = cast(str, self._driver.execute_script("return document.URL"))
         except WebDriverException:
             doc_url = ""
         if doc_url.startswith("chrome-error://"):
@@ -62,13 +66,13 @@ class SeleniumPageDelegate:
             state = "complete" if wait_until == "load" else "interactive"
             try:
                 WebDriverWait(self._driver, timeout_ms / 1000).until(
-                    lambda d: d.execute_script("return document.readyState")
-                    in ("complete",) + (("interactive",) if state == "interactive" else ())
+                    lambda d: (
+                        d.execute_script("return document.readyState")
+                        in ("complete",) + (("interactive",) if state == "interactive" else ())
+                    )
                 )
             except TimeoutException as exc:
-                raise errors.VisusTimeoutError(
-                    f"readyState wait for {url!r} timed out"
-                ) from exc
+                raise errors.VisusTimeoutError(f"readyState wait for {url!r} timed out") from exc
 
     def current_url(self) -> str:
         self._activate()
@@ -121,13 +125,13 @@ class SeleniumPageDelegate:
 class SeleniumContextDelegate:
     """S0: a non-isolated grouping over one driver. Real isolation arrives in S4 (BiDi)."""
 
-    def __init__(self, driver: object, first_handle: str | None = None) -> None:
+    def __init__(self, driver: WebDriver, first_handle: str | None = None) -> None:
         self._driver = driver
         self._pages: list[SeleniumPageDelegate] = []
         if first_handle is not None:
             self._pages.append(SeleniumPageDelegate(driver, first_handle))
 
-    def new_page(self) -> SeleniumPageDelegate:
+    def new_page(self) -> PageDelegate:
         before = set(self._driver.window_handles)
         try:
             self._driver.switch_to.new_window("tab")
@@ -142,7 +146,7 @@ class SeleniumContextDelegate:
         self._pages.append(page)
         return page
 
-    def pages(self) -> list[SeleniumPageDelegate]:
+    def pages(self) -> list[PageDelegate]:
         return [p for p in self._pages if not p.is_closed()]
 
     def close(self) -> None:

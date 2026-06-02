@@ -26,7 +26,7 @@ def build_options(*, headless: bool, download_dir: str, user_data_dir: str) -> O
 
 
 def build_service() -> Service:
-    # No executable_path: Selenium Manager (built into selenium>=4.6) downloads/resolves chromedriver.
+    # No executable_path: Selenium Manager (selenium>=4.6) downloads/resolves chromedriver.
     return Service()
 
 

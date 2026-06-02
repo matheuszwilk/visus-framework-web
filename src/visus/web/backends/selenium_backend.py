@@ -8,19 +8,19 @@ import shutil
 import tempfile
 import weakref
 from collections.abc import Callable
+from typing import cast
 
 from selenium.common.exceptions import WebDriverException
+from selenium.webdriver.remote.webdriver import WebDriver
 
-from visus.web.backends.base import BrowserConfig
+from visus.web.backends.base import BrowserConfig, ContextDelegate
 from visus.web.backends.selenium.driver_delegate import (
     SeleniumContextDelegate,
     translate_exc,
 )
 
 
-def _cleanup(
-    driver_ref: "weakref.ref[object]", profile_dir: str, download_dir: str
-) -> None:
+def _cleanup(driver_ref: weakref.ref[WebDriver], profile_dir: str, download_dir: str) -> None:
     """atexit safety net: quit a still-alive driver and remove its temp dirs."""
     driver = driver_ref()
     if driver is not None:
@@ -33,7 +33,7 @@ def _cleanup(
 
 
 class SeleniumBrowserDelegate:
-    def __init__(self, driver: object, profile_dir: str, download_dir: str) -> None:
+    def __init__(self, driver: WebDriver, profile_dir: str, download_dir: str) -> None:
         self._driver = driver
         self._profile_dir = profile_dir
         self._download_dir = download_dir
@@ -50,15 +50,15 @@ class SeleniumBrowserDelegate:
         )
         atexit.register(self._atexit_cleanup)
 
-    def new_context(self) -> SeleniumContextDelegate:
+    def new_context(self) -> ContextDelegate:
         ctx = SeleniumContextDelegate(self._driver)
         # A context needs at least one window; open one immediately.
         ctx.new_page()
         self._contexts.append(ctx)
         return ctx
 
-    def contexts(self) -> list[SeleniumContextDelegate]:
-        return list(self._contexts)
+    def contexts(self) -> list[ContextDelegate]:
+        return cast(list[ContextDelegate], list(self._contexts))
 
     def dispose(self) -> None:
         if self._disposed:
@@ -82,7 +82,7 @@ class SeleniumBackend:
         )
         service = config.service_factory()
         try:
-            driver = config.driver_factory(options=options, service=service)
+            driver = cast(WebDriver, config.driver_factory(options=options, service=service))
         except WebDriverException as exc:
             shutil.rmtree(profile_dir, ignore_errors=True)
             shutil.rmtree(download_dir, ignore_errors=True)

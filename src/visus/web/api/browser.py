@@ -35,7 +35,7 @@ class Browser:
     def close(self) -> None:
         self._delegate.dispose()
 
-    def __enter__(self) -> "Browser":
+    def __enter__(self) -> Browser:
         return self
 
     def __exit__(

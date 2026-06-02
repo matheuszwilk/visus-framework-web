@@ -1,9 +1,15 @@
 import pytest
+
 from visus.web import errors
 
 
 def test_all_errors_subclass_base():
-    for name in ("UnsupportedEngineError", "VisusTimeoutError", "NavigationError", "TargetClosedError"):
+    for name in (
+        "UnsupportedEngineError",
+        "VisusTimeoutError",
+        "NavigationError",
+        "TargetClosedError",
+    ):
         cls = getattr(errors, name)
         assert issubclass(cls, errors.VisusWebError)
 

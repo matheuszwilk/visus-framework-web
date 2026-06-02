@@ -3,6 +3,7 @@ from selenium.common.exceptions import (
     TimeoutException,
     WebDriverException,
 )
+
 from visus.web import errors
 from visus.web.backends.selenium.driver_delegate import translate_exc
 
