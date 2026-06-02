@@ -10,15 +10,24 @@ from selenium.common.exceptions import (
     WebDriverException,
 )
 from selenium.webdriver import ActionChains
+from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.remote.webdriver import WebDriver
 from selenium.webdriver.remote.webelement import WebElement
-from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support.ui import Select, WebDriverWait
 
 from visus.web import errors
 from visus.web.backends.base import PageDelegate
 from visus.web.backends.selenium.actionability import run_action
 from visus.web.backends.selenium.expect_engine import run_expect
 from visus.web.backends.selenium.js import BUNDLE_JS
+
+_KEYMAP = {
+    "Enter": Keys.ENTER, "Tab": Keys.TAB, "Escape": Keys.ESCAPE, "Backspace": Keys.BACK_SPACE,
+    "Delete": Keys.DELETE, "ArrowUp": Keys.ARROW_UP, "ArrowDown": Keys.ARROW_DOWN,
+    "ArrowLeft": Keys.ARROW_LEFT, "ArrowRight": Keys.ARROW_RIGHT, "Space": " ",
+    "Home": Keys.HOME, "End": Keys.END,
+}
+_MODMAP = {"Control": Keys.CONTROL, "Shift": Keys.SHIFT, "Alt": Keys.ALT, "Meta": Keys.META}
 
 
 def translate_exc(exc: Exception) -> errors.VisusWebError:
@@ -199,6 +208,89 @@ class SeleniumPageDelegate:
             force=force,
             dispatch=_do_fill,
         )
+
+    def locator_hover(self, selector: str, *, timeout_ms: int, force: bool) -> None:
+        self._activate(); self._ensure_bundle()
+        run_action(self._driver, selector, "hover", timeout_ms=timeout_ms, force=force,
+                   dispatch=lambda el: ActionChains(self._driver).move_to_element(el).perform())
+
+    def locator_dblclick(self, selector: str, *, timeout_ms: int, force: bool) -> None:
+        self._activate(); self._ensure_bundle()
+        run_action(self._driver, selector, "dblclick", timeout_ms=timeout_ms, force=force,
+                   dispatch=lambda el: ActionChains(self._driver).move_to_element(el).double_click().perform())
+
+    def locator_set_checked(self, selector: str, checked: bool, *, timeout_ms: int, force: bool) -> None:
+        self._activate(); self._ensure_bundle()
+
+        def _do(el: WebElement) -> None:
+            cur = bool(self._driver.execute_script(
+                "return window.__visus.elementState(arguments[0],'checked').matches;", el))
+            if cur != checked:
+                ActionChains(self._driver).move_to_element(el).click().perform()
+
+        run_action(self._driver, selector, "check", timeout_ms=timeout_ms, force=force, dispatch=_do)
+
+    def locator_select_option(self, selector: str, *, value: str | None, label: str | None,
+                              index: int | None, timeout_ms: int) -> None:
+        self._activate(); self._ensure_bundle()
+
+        def _do(el: WebElement) -> None:
+            sel = Select(el)
+            if value is not None:
+                sel.select_by_value(value)
+            elif label is not None:
+                sel.select_by_visible_text(label)
+            elif index is not None:
+                sel.select_by_index(index)
+
+        run_action(self._driver, selector, "select_option", timeout_ms=timeout_ms, force=False, dispatch=_do)
+
+    def locator_press(self, selector: str, key: str, *, timeout_ms: int) -> None:
+        self._activate(); self._ensure_bundle()
+
+        def _do(el: WebElement) -> None:
+            parts = key.split("+")
+            mods = [_MODMAP[p] for p in parts[:-1] if p in _MODMAP]
+            main = _KEYMAP.get(parts[-1], parts[-1])
+            if mods:
+                self._driver.execute_script("arguments[0].focus();", el)
+                ac = ActionChains(self._driver)
+                for m in mods:
+                    ac.key_down(m)
+                ac.send_keys(main)
+                for m in reversed(mods):
+                    ac.key_up(m)
+                ac.perform()
+            else:
+                el.send_keys(main)
+
+        run_action(self._driver, selector, "press", timeout_ms=timeout_ms, force=False, dispatch=_do)
+
+    def locator_focus(self, selector: str, *, timeout_ms: int) -> None:
+        self._activate(); self._ensure_bundle()
+        run_action(self._driver, selector, "focus", timeout_ms=timeout_ms, force=False,
+                   dispatch=lambda el: self._driver.execute_script("arguments[0].focus();", el))
+
+    def locator_blur(self, selector: str, *, timeout_ms: int) -> None:
+        self._activate(); self._ensure_bundle()
+        run_action(self._driver, selector, "blur", timeout_ms=timeout_ms, force=False,
+                   dispatch=lambda el: self._driver.execute_script("arguments[0].blur();", el))
+
+    def locator_clear(self, selector: str, *, timeout_ms: int, force: bool) -> None:
+        self._activate(); self._ensure_bundle()
+        run_action(self._driver, selector, "clear", timeout_ms=timeout_ms, force=force,
+                   dispatch=lambda el: el.clear())
+
+    def locator_drag_to(self, selector: str, target: str, *, timeout_ms: int) -> None:
+        self._activate(); self._ensure_bundle()
+        tgt = self._resolve_strict(target)
+        if tgt is None:
+            raise errors.ElementNotFoundError(f"drag target not found: {target}")
+
+        def _do(src: WebElement) -> None:
+            ActionChains(self._driver).click_and_hold(src).move_to_element(tgt).release().perform()
+
+        run_action(self._driver, selector, "drag", timeout_ms=timeout_ms, force=False, dispatch=_do)
 
     def locator_input_value(self, selector: str) -> str:
         self._activate()
