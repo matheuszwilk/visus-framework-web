@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import cast
+
 from visus.web.api.page import Page
 
 _RECORDER_JS = r"""
@@ -43,18 +45,19 @@ def inject_recorder(page: Page) -> None:
 
 def drain(page: Page) -> list[dict]:  # type: ignore[type-arg]
     """Drain and return all recorded events, resetting the buffer."""
-    result = page.evaluate("() => { var r = window.__visusRec || []; window.__visusRec = []; return r; }")
+    script = "() => { var r = window.__visusRec || []; window.__visusRec = []; return r; }"
+    result = page.evaluate(script)
     if result is None:
         return []
-    return list(result)  # type: ignore[arg-type]
+    return cast(list, result)  # type: ignore[type-arg]
 
 
 def _target_expr(t: dict) -> str:  # type: ignore[type-arg]
     if t["kind"] == "role":
-        return f'get_by_role({t["role"]!r}, name={t["name"]!r})'
+        return f"get_by_role({t['role']!r}, name={t['name']!r})"
     if t["kind"] == "testid":
-        return f'get_by_test_id({t["value"]!r})'
-    return f'locator({t["value"]!r})'
+        return f"get_by_test_id({t['value']!r})"
+    return f"locator({t['value']!r})"
 
 
 def generate_line(event: dict) -> str:  # type: ignore[type-arg]

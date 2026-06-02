@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import runpy
 from pathlib import Path
-from typing import Optional
 
 import typer
 
@@ -100,7 +99,7 @@ def mcp() -> None:
 @app.command()
 def codegen(
     url: str,
-    output: Optional[str] = typer.Option(None, "-o", "--output"),
+    output: str | None = typer.Option(None, "-o", "--output"),
     engine: str = "chrome",
 ) -> None:
     """Record interactions in a headed browser and generate visus.web code."""
