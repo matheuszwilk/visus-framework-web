@@ -305,6 +305,17 @@
     });
   }
 
+  function snapshot() {
+    var roles = ["button", "link", "textbox", "searchbox", "checkbox", "radio", "combobox",
+                 "heading", "tab", "menuitem", "option", "switch", "slider", "spinbutton"];
+    var out = [], all = document.querySelectorAll("*");
+    for (var i = 0; i < all.length; i++) {
+      var e = all[i], r = computeRole(e);
+      if (roles.indexOf(r) >= 0 && isVisible(e)) out.push({ role: r, name: accessibleName(e) });
+    }
+    return out;
+  }
+
   window.__visus = {
     queryAll: queryAll,
     elementState: elementState,
@@ -315,5 +326,6 @@
     clickablePoint: clickablePoint,
     hitTarget: hitTarget,
     checkStable: checkStable,
+    snapshot: snapshot,
   };
 })();

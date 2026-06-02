@@ -65,6 +65,7 @@ class PageDelegate(Protocol):
     def handle_next_dialog(
         self, *, accept: bool, prompt_text: str | None, timeout_ms: int
     ) -> tuple[str, str]: ...
+    def snapshot(self) -> list[dict]: ...  # type: ignore[type-arg]
 
 
 @runtime_checkable

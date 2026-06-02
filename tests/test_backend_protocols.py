@@ -86,6 +86,9 @@ class _FakePage:
     def handle_next_dialog(self, *, accept, prompt_text, timeout_ms):
         return ("", "dialog")
 
+    def snapshot(self):
+        return []
+
 
 class _FakeContext:
     def new_page(self):

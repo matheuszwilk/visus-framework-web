@@ -87,6 +87,10 @@ class Page:
     def get_by_test_id(self, test_id: str) -> Locator:
         return Locator(self._delegate, (), self._defaults).get_by_test_id(test_id)
 
+    def snapshot(self) -> list[dict]:  # type: ignore[type-arg]
+        """Return the page's interactive elements as a list of {role, name} dicts."""
+        return self._delegate.snapshot()
+
     def evaluate(self, expression: str, arg: object = None) -> object:
         return self._delegate.evaluate(expression, arg)
 

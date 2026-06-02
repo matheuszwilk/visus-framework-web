@@ -549,6 +549,12 @@ class SeleniumPageDelegate:
             alert.dismiss()
         return (message, "dialog")
 
+    def snapshot(self) -> list[dict]:  # type: ignore[type-arg]
+        """Return interactive elements as {role, name} dicts using the __visus bundle."""
+        self._activate()
+        self._ensure_bundle()
+        return cast(list[dict], self._driver.execute_script("return window.__visus.snapshot();"))  # type: ignore[type-arg]
+
 
 class SeleniumContextDelegate:
     """S0: a non-isolated grouping over one driver. Real isolation arrives in S4 (BiDi)."""
