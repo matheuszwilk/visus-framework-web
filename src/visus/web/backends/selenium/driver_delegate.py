@@ -17,6 +17,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from visus.web import errors
 from visus.web.backends.base import PageDelegate
 from visus.web.backends.selenium.actionability import run_action
+from visus.web.backends.selenium.expect_engine import run_expect
 from visus.web.backends.selenium.js import BUNDLE_JS
 
 
@@ -206,6 +207,13 @@ class SeleniumPageDelegate:
         if el is None:
             raise errors.ElementNotFoundError(f"no element for input_value: {selector}")
         return cast(str, self._driver.execute_script("return arguments[0].value;", el))
+
+    def expect_poll(
+        self, selector: str, matcher: str, arg: dict | None, *, is_not: bool, timeout_ms: int
+    ) -> None:
+        self._activate()
+        self._ensure_bundle()
+        run_expect(self._driver, selector, matcher, arg, is_not=is_not, timeout_ms=timeout_ms)
 
 
 class SeleniumContextDelegate:
