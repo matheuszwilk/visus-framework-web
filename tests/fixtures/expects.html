@@ -1,0 +1,21 @@
+<!doctype html>
+<html>
+  <head><title>expects fixture</title><style>.hidden{display:none;}</style></head>
+  <body>
+    <div id="msg">loading</div>
+    <button id="appear" class="hidden">Now visible</button>
+    <button id="vanish">Click to vanish</button>
+    <ul id="list"><li>one</li></ul>
+    <button id="enableme" disabled>enable me</button>
+    <script>
+      setTimeout(function(){ document.getElementById('msg').textContent = 'ready'; }, 700);
+      setTimeout(function(){ document.getElementById('appear').classList.remove('hidden'); }, 700);
+      setTimeout(function(){ document.getElementById('vanish').classList.add('hidden'); }, 700);
+      setTimeout(function(){
+        var ul = document.getElementById('list');
+        ul.insertAdjacentHTML('beforeend', '<li>two</li><li>three</li>');
+      }, 700);
+      setTimeout(function(){ document.getElementById('enableme').removeAttribute('disabled'); }, 700);
+    </script>
+  </body>
+</html>

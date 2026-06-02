@@ -44,6 +44,8 @@ class _FakePage:
     def locator_input_value(self, selector):
         return ""
 
+    def expect_poll(self, selector, matcher, arg, *, is_not, timeout_ms): ...
+
 
 class _FakeContext:
     def new_page(self):
