@@ -1,3 +1,6 @@
+from dataclasses import FrozenInstanceError
+
+import pytest
 from visus.web.backends.base import (
     Backend,
     BrowserConfig,
@@ -20,17 +23,47 @@ class _FakePage:
     def is_closed(self): return False
 
 
-def test_structural_conformance():
+class _FakeContext:
+    def new_page(self): return _FakePage()
+    def pages(self): return []
+    def close(self): ...
+
+
+class _FakeBrowser:
+    def new_context(self): return _FakeContext()
+    def contexts(self): return []
+    def dispose(self): ...
+
+
+class _FakeBackend:
+    def launch(self, config, *, headless): return _FakeBrowser()
+
+
+class _NotAnything:
+    pass
+
+
+def test_page_delegate_conformance():
     assert isinstance(_FakePage(), PageDelegate)
+    assert not isinstance(_NotAnything(), PageDelegate)
 
 
-def test_non_conformer_is_rejected():
-    class NotAPage:
-        pass
-    assert not isinstance(NotAPage(), PageDelegate)
+def test_context_delegate_conformance():
+    assert isinstance(_FakeContext(), ContextDelegate)
+    assert not isinstance(_NotAnything(), ContextDelegate)
 
 
-def test_browser_config_is_frozen_dataclass():
+def test_browser_delegate_conformance():
+    assert isinstance(_FakeBrowser(), BrowserDelegate)
+    assert not isinstance(_NotAnything(), BrowserDelegate)
+
+
+def test_backend_conformance():
+    assert isinstance(_FakeBackend(), Backend)
+    assert not isinstance(_NotAnything(), Backend)
+
+
+def test_browser_config_holds_fields():
     cfg = BrowserConfig(
         engine=Engine.CHROME,
         options_factory=lambda **k: None,
@@ -38,3 +71,14 @@ def test_browser_config_is_frozen_dataclass():
         driver_factory=lambda **k: None,
     )
     assert cfg.engine is Engine.CHROME
+
+
+def test_browser_config_is_frozen():
+    cfg = BrowserConfig(
+        engine=Engine.CHROME,
+        options_factory=lambda **k: None,
+        service_factory=lambda **k: None,
+        driver_factory=lambda **k: None,
+    )
+    with pytest.raises(FrozenInstanceError):
+        cfg.engine = Engine.FIREFOX  # type: ignore[misc]
