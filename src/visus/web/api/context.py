@@ -19,3 +19,12 @@ class Context:
 
     def close(self) -> None:
         self._delegate.close()
+
+    def cookies(self) -> list[dict]:  # type: ignore[type-arg]
+        return self._delegate.cookies()
+
+    def add_cookies(self, cookies: list[dict]) -> None:  # type: ignore[type-arg]
+        self._delegate.add_cookies(cookies)
+
+    def clear_cookies(self) -> None:
+        self._delegate.clear_cookies()

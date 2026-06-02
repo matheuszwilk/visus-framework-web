@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from visus.web.api.locator import Locator
 from visus.web.backends.base import PageDelegate
 from visus.web.config import Defaults
@@ -72,3 +74,12 @@ class Page:
 
     def get_by_test_id(self, test_id: str) -> Locator:
         return Locator(self._delegate, (), self._defaults).get_by_test_id(test_id)
+
+    def evaluate(self, expression: str, arg: object = None) -> object:
+        return self._delegate.evaluate(expression, arg)
+
+    def screenshot(self, *, path: str | None = None, full_page: bool = False) -> bytes:
+        data = self._delegate.screenshot(full_page=full_page)
+        if path is not None:
+            Path(path).write_bytes(data)
+        return data

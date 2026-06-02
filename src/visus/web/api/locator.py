@@ -166,3 +166,18 @@ class Locator:
 
     def is_hidden(self) -> bool:
         return self._delegate.locator_state(self._encoded, "hidden")
+
+    def evaluate(self, expression: str, arg: object = None) -> object:
+        return self._delegate.locator_evaluate(self._encoded, expression, arg)
+
+    def screenshot(self, *, path: str | None = None) -> bytes:
+        from pathlib import Path
+
+        data = self._delegate.locator_screenshot(self._encoded)
+        if path is not None:
+            Path(path).write_bytes(data)
+        return data
+
+    def set_input_files(self, files: str | list[str]) -> None:
+        paths = [files] if isinstance(files, str) else list(files)
+        self._delegate.locator_set_input_files(self._encoded, paths)
