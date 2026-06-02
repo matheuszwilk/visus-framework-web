@@ -56,10 +56,11 @@ def translate_exc(exc: Exception) -> errors.VisusWebError:
 class SeleniumPageDelegate:
     """One browser window handle. Activates its window before each operation."""
 
-    def __init__(self, driver: WebDriver, handle: str) -> None:
+    def __init__(self, driver: WebDriver, handle: str, download_dir: str | None = None) -> None:
         self._driver = driver
         self._handle = handle
         self._closed = False
+        self._download_dir = download_dir
 
     def _activate(self) -> None:
         if self._closed:
@@ -564,15 +565,46 @@ class SeleniumPageDelegate:
         )
         return base64.b64decode(cast(str, res["data"]))
 
+    def snapshot_download_dir(self) -> list[str]:
+        """Return the current list of files in the download directory."""
+        if self._download_dir and os.path.isdir(self._download_dir):
+            return os.listdir(self._download_dir)
+        return []
+
+    def wait_for_download(self, before: list[str], *, timeout_ms: int) -> tuple[str, str]:
+        """Poll until a new completed file appears in the download directory."""
+        if not self._download_dir:
+            raise errors.VisusTimeoutError("no download directory configured")
+        before_set = set(before)
+        _PARTIAL_SUFFIXES = (".crdownload", ".tmp", ".part")
+        deadline = time.monotonic() + timeout_ms / 1000
+        while True:
+            if os.path.isdir(self._download_dir):
+                for name in os.listdir(self._download_dir):
+                    if name not in before_set and not any(
+                        name.endswith(s) for s in _PARTIAL_SUFFIXES
+                    ):
+                        abspath = os.path.abspath(os.path.join(self._download_dir, name))
+                        return (abspath, name)
+            if time.monotonic() >= deadline:
+                raise errors.VisusTimeoutError(f"no new download completed within {timeout_ms} ms")
+            time.sleep(0.05)
+
 
 class SeleniumContextDelegate:
     """S0: a non-isolated grouping over one driver. Real isolation arrives in S4 (BiDi)."""
 
-    def __init__(self, driver: WebDriver, first_handle: str | None = None) -> None:
+    def __init__(
+        self,
+        driver: WebDriver,
+        first_handle: str | None = None,
+        download_dir: str | None = None,
+    ) -> None:
         self._driver = driver
+        self._download_dir = download_dir
         self._pages: list[SeleniumPageDelegate] = []
         if first_handle is not None:
-            self._pages.append(SeleniumPageDelegate(driver, first_handle))
+            self._pages.append(SeleniumPageDelegate(driver, first_handle, download_dir))
 
     def new_page(self) -> PageDelegate:
         before = set(self._driver.window_handles)
@@ -585,7 +617,7 @@ class SeleniumContextDelegate:
             raise errors.VisusWebError(
                 f"expected exactly one new window handle, found {len(new_handles)}"
             )
-        page = SeleniumPageDelegate(self._driver, new_handles.pop())
+        page = SeleniumPageDelegate(self._driver, new_handles.pop(), self._download_dir)
         self._pages.append(page)
         return page
 

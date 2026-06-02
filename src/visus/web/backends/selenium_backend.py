@@ -41,7 +41,9 @@ class SeleniumBrowserDelegate:
         self._contexts: list[SeleniumContextDelegate] = []
         # First context adopts the driver's initial window handle.
         initial = driver.current_window_handle
-        self._contexts.append(SeleniumContextDelegate(driver, first_handle=initial))
+        self._contexts.append(
+            SeleniumContextDelegate(driver, first_handle=initial, download_dir=download_dir)
+        )
         # Register a per-instance atexit cleanup so it can be unregistered precisely
         # on dispose() (a bare _cleanup registration would be impossible to remove
         # selectively, leaking handlers across many launches).
@@ -51,7 +53,7 @@ class SeleniumBrowserDelegate:
         atexit.register(self._atexit_cleanup)
 
     def new_context(self) -> ContextDelegate:
-        ctx = SeleniumContextDelegate(self._driver)
+        ctx = SeleniumContextDelegate(self._driver, download_dir=self._download_dir)
         # A context needs at least one window; open one immediately.
         ctx.new_page()
         self._contexts.append(ctx)
@@ -87,4 +89,12 @@ class SeleniumBackend:
             shutil.rmtree(profile_dir, ignore_errors=True)
             shutil.rmtree(download_dir, ignore_errors=True)
             raise translate_exc(exc) from exc
+        # Enable headless downloads for Chromium via CDP.
+        try:
+            driver.execute_cdp_cmd(
+                "Page.setDownloadBehavior",
+                {"behavior": "allow", "downloadPath": download_dir},
+            )
+        except Exception:
+            pass  # Non-Chromium drivers don't support CDP; silently ignore.
         return SeleniumBrowserDelegate(driver, profile_dir, download_dir)

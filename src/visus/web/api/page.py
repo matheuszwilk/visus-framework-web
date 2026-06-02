@@ -5,7 +5,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from visus.web.api.events import Dialog, _ValueHolder
+from visus.web.api.events import Dialog, Download, _ValueHolder
 from visus.web.api.locator import Locator
 from visus.web.backends.base import PageDelegate
 from visus.web.config import Defaults
@@ -142,3 +142,15 @@ class Page:
             timeout_ms=timeout if timeout is not None else self._defaults.action_timeout_ms,
         )
         holder._set(Dialog(message=msg, type=typ))
+
+    @contextmanager
+    def expect_download(self, *, timeout: int | None = None) -> Generator[_ValueHolder, None, None]:
+        """Context manager that waits for a file download to complete and captures it."""
+        before = self._delegate.snapshot_download_dir()
+        holder: _ValueHolder = _ValueHolder()
+        yield holder
+        path, name = self._delegate.wait_for_download(
+            before,
+            timeout_ms=timeout if timeout is not None else self._defaults.action_timeout_ms,
+        )
+        holder._set(Download(path=path, suggested_filename=name))
