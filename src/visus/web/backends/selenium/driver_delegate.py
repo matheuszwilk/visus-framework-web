@@ -9,11 +9,14 @@ from selenium.common.exceptions import (
     TimeoutException,
     WebDriverException,
 )
+from selenium.webdriver import ActionChains
 from selenium.webdriver.remote.webdriver import WebDriver
+from selenium.webdriver.remote.webelement import WebElement
 from selenium.webdriver.support.ui import WebDriverWait
 
 from visus.web import errors
 from visus.web.backends.base import PageDelegate
+from visus.web.backends.selenium.actionability import run_action
 from visus.web.backends.selenium.js import BUNDLE_JS
 
 
@@ -166,6 +169,32 @@ class SeleniumPageDelegate:
             "str | None",
             self._driver.execute_script("return window.__visus.normText(arguments[0]);", el),
         )
+
+    def locator_click(self, selector: str, *, timeout_ms: int, force: bool) -> None:
+        self._activate()
+        self._ensure_bundle()
+        run_action(
+            self._driver, selector, "click", timeout_ms=timeout_ms, force=force,
+            dispatch=lambda el: ActionChains(self._driver).move_to_element(el).click().perform(),
+        )
+
+    def locator_fill(self, selector: str, value: str, *, timeout_ms: int, force: bool) -> None:
+        self._activate()
+        self._ensure_bundle()
+
+        def _do_fill(el: WebElement) -> None:
+            el.clear()
+            el.send_keys(value)
+
+        run_action(self._driver, selector, "fill", timeout_ms=timeout_ms, force=force, dispatch=_do_fill)
+
+    def locator_input_value(self, selector: str) -> str:
+        self._activate()
+        self._ensure_bundle()
+        el = self._resolve_strict(selector)
+        if el is None:
+            raise errors.ElementNotFoundError(f"no element for input_value: {selector}")
+        return cast(str, self._driver.execute_script("return arguments[0].value;", el))
 
 
 class SeleniumContextDelegate:
