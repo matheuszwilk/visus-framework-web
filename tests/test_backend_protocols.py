@@ -44,6 +44,15 @@ class _FakePage:
     def locator_input_value(self, selector):
         return ""
 
+    def locator_state(self, selector, state):
+        return False
+
+    def locator_all_text(self, selector):
+        return []
+
+    def locator_get_attribute(self, selector, name):
+        return None
+
     def expect_poll(self, selector, matcher, arg, *, is_not, timeout_ms): ...
 
 

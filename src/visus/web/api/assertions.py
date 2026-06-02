@@ -48,6 +48,27 @@ class LocatorAssertions:
     def to_have_count(self, count: int, *, timeout: int | None = None) -> None:
         self._poll("count", {"count": count}, timeout)
 
+    def to_have_value(self, value: str, *, timeout: int | None = None) -> None:
+        self._poll("value", {"value": value}, timeout)
+
+    def to_have_attribute(self, name: str, value: str, *, timeout: int | None = None) -> None:
+        self._poll("attribute", {"name": name, "value": value}, timeout)
+
+    def to_have_class(self, class_name: str, *, timeout: int | None = None) -> None:
+        self._poll("class", {"value": class_name, "mode": "exact"}, timeout)
+
+    def to_contain_class(self, class_name: str, *, timeout: int | None = None) -> None:
+        self._poll("class", {"value": class_name, "mode": "contains"}, timeout)
+
+    def to_have_role(self, role: str, *, timeout: int | None = None) -> None:
+        self._poll("role", {"value": role}, timeout)
+
+    def to_be_disabled(self, *, timeout: int | None = None) -> None:
+        self._poll("disabled", None, timeout)
+
+    def to_be_editable(self, *, timeout: int | None = None) -> None:
+        self._poll("editable", None, timeout)
+
 
 def expect(locator: Locator) -> LocatorAssertions:
     """Web-first assertion entry point: expect(locator).to_be_visible() etc."""

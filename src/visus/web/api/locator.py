@@ -31,6 +31,21 @@ class Locator:
     def get_by_text(self, text: str, *, exact: bool = False) -> Locator:
         return self._child({"kind": "text", "value": text, "exact": exact})
 
+    def get_by_label(self, text: str, *, exact: bool = False) -> "Locator":
+        return self._child({"kind": "label", "value": text, "exact": exact})
+
+    def get_by_placeholder(self, text: str, *, exact: bool = False) -> "Locator":
+        return self._child({"kind": "placeholder", "value": text, "exact": exact})
+
+    def get_by_alt_text(self, text: str, *, exact: bool = False) -> "Locator":
+        return self._child({"kind": "alt", "value": text, "exact": exact})
+
+    def get_by_title(self, text: str, *, exact: bool = False) -> "Locator":
+        return self._child({"kind": "title", "value": text, "exact": exact})
+
+    def get_by_test_id(self, test_id: str) -> "Locator":
+        return self._child({"kind": "testid", "value": test_id})
+
     def locator(self, selector: str) -> Locator:
         if selector.startswith("xpath="):
             return self._child({"kind": "xpath", "value": selector[len("xpath=") :]})
@@ -84,3 +99,24 @@ class Locator:
 
     def input_value(self) -> str:
         return self._delegate.locator_input_value(self._encoded)
+
+    def all(self) -> list["Locator"]:
+        return [self.nth(i) for i in range(self.count())]
+
+    def all_text_contents(self) -> list[str]:
+        return self._delegate.locator_all_text(self._encoded)
+
+    def get_attribute(self, name: str) -> str | None:
+        return self._delegate.locator_get_attribute(self._encoded, name)
+
+    def is_enabled(self) -> bool:
+        return self._delegate.locator_state(self._encoded, "enabled")
+
+    def is_checked(self) -> bool:
+        return self._delegate.locator_state(self._encoded, "checked")
+
+    def is_editable(self) -> bool:
+        return self._delegate.locator_state(self._encoded, "editable")
+
+    def is_hidden(self) -> bool:
+        return self._delegate.locator_state(self._encoded, "hidden")

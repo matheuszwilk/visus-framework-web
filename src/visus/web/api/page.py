@@ -57,3 +57,18 @@ class Page:
 
     def get_by_text(self, text: str, *, exact: bool = False) -> Locator:
         return Locator(self._delegate, (), self._defaults).get_by_text(text, exact=exact)
+
+    def get_by_label(self, text: str, *, exact: bool = False) -> Locator:
+        return Locator(self._delegate, (), self._defaults).get_by_label(text, exact=exact)
+
+    def get_by_placeholder(self, text: str, *, exact: bool = False) -> Locator:
+        return Locator(self._delegate, (), self._defaults).get_by_placeholder(text, exact=exact)
+
+    def get_by_alt_text(self, text: str, *, exact: bool = False) -> Locator:
+        return Locator(self._delegate, (), self._defaults).get_by_alt_text(text, exact=exact)
+
+    def get_by_title(self, text: str, *, exact: bool = False) -> Locator:
+        return Locator(self._delegate, (), self._defaults).get_by_title(text, exact=exact)
+
+    def get_by_test_id(self, test_id: str) -> Locator:
+        return Locator(self._delegate, (), self._defaults).get_by_test_id(test_id)
