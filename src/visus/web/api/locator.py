@@ -11,40 +11,45 @@ if TYPE_CHECKING:
 class Locator:
     """A lazy recipe: page delegate + immutable tuple of selector steps."""
 
-    def __init__(self, delegate: "PageDelegate", steps: tuple[dict, ...], defaults: "Defaults | None") -> None:
+    def __init__(
+        self,
+        delegate: PageDelegate,
+        steps: tuple[dict[str, object], ...],
+        defaults: Defaults | None,
+    ) -> None:
         self._delegate = delegate
         self._steps = tuple(steps)
         self._defaults = defaults
 
-    def _child(self, step: dict) -> "Locator":
+    def _child(self, step: dict[str, object]) -> Locator:
         return Locator(self._delegate, self._steps + (step,), self._defaults)
 
     # --- builders (pure string/dict surgery; never touch the DOM) ---
-    def get_by_role(self, role: str, *, name: str | None = None, exact: bool = False) -> "Locator":
+    def get_by_role(self, role: str, *, name: str | None = None, exact: bool = False) -> Locator:
         return self._child({"kind": "role", "role": role, "name": name, "exact": exact})
 
-    def get_by_text(self, text: str, *, exact: bool = False) -> "Locator":
+    def get_by_text(self, text: str, *, exact: bool = False) -> Locator:
         return self._child({"kind": "text", "value": text, "exact": exact})
 
-    def locator(self, selector: str) -> "Locator":
+    def locator(self, selector: str) -> Locator:
         if selector.startswith("xpath="):
-            return self._child({"kind": "xpath", "value": selector[len("xpath="):]})
+            return self._child({"kind": "xpath", "value": selector[len("xpath=") :]})
         if selector.startswith("//") or selector.startswith("("):
             return self._child({"kind": "xpath", "value": selector})
         return self._child({"kind": "css", "value": selector})
 
-    def filter(self, *, has_text: str | None = None) -> "Locator":
+    def filter(self, *, has_text: str | None = None) -> Locator:
         if has_text is not None:
             return self._child({"kind": "filter_has_text", "value": has_text})
         return self
 
-    def first(self) -> "Locator":
+    def first(self) -> Locator:
         return self._child({"kind": "nth", "index": 0})
 
-    def last(self) -> "Locator":
+    def last(self) -> Locator:
         return self._child({"kind": "nth", "index": -1})
 
-    def nth(self, index: int) -> "Locator":
+    def nth(self, index: int) -> Locator:
         return self._child({"kind": "nth", "index": index})
 
     @property

@@ -132,9 +132,7 @@ class SeleniumPageDelegate:
         self._ensure_bundle()
         return cast(
             list[object],
-            self._driver.execute_script(
-                "return window.__visus.queryAll(arguments[0]);", selector
-            ),
+            self._driver.execute_script("return window.__visus.queryAll(arguments[0]);", selector),
         )
 
     def _resolve_strict(self, selector: str) -> object | None:

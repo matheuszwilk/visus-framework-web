@@ -4,10 +4,20 @@ from visus.web.api.locator import Locator
 
 
 class _RecordingDelegate:
-    def __init__(self): self.last = None
-    def locator_count(self, selector): self.last = selector; return 0
-    def locator_is_visible(self, selector): self.last = selector; return False
-    def locator_text_content(self, selector): self.last = selector; return None
+    def __init__(self):
+        self.last = None
+
+    def locator_count(self, selector):
+        self.last = selector
+        return 0
+
+    def locator_is_visible(self, selector):
+        self.last = selector
+        return False
+
+    def locator_text_content(self, selector):
+        self.last = selector
+        return None
 
 
 def _steps(loc):
@@ -42,3 +52,25 @@ def test_count_passes_encoded_steps_to_delegate():
     d = _RecordingDelegate()
     Locator(d, (), None).get_by_text("Hi").count()
     assert json.loads(d.last) == [{"kind": "text", "value": "Hi", "exact": False}]
+
+
+def test_locator_xpath_prefix():
+    d = _RecordingDelegate()
+    loc = Locator(d, (), None).locator("xpath=//div")
+    assert _steps(loc) == [{"kind": "xpath", "value": "//div"}]
+
+
+def test_filter_with_no_args_returns_same_locator():
+    d = _RecordingDelegate()
+    loc = Locator(d, (), None).get_by_text("foo")
+    filtered = loc.filter()
+    assert _steps(filtered) == _steps(loc)
+
+
+def test_first_last_nth_steps():
+    d = _RecordingDelegate()
+    base = Locator(d, (), None).get_by_text("item")
+    text_step = {"kind": "text", "value": "item", "exact": False}
+    assert _steps(base.first()) == [text_step, {"kind": "nth", "index": 0}]
+    assert _steps(base.last()) == [text_step, {"kind": "nth", "index": -1}]
+    assert _steps(base.nth(2)) == [text_step, {"kind": "nth", "index": 2}]
