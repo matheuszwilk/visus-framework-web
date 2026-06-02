@@ -19,3 +19,9 @@ def test_generic_webdriver_maps_to_base():
     out = translate_exc(WebDriverException("x"))
     assert isinstance(out, errors.VisusWebError)
     assert not isinstance(out, (errors.VisusTimeoutError, errors.TargetClosedError))
+
+
+def test_non_selenium_exception_maps_to_base():
+    out = translate_exc(ValueError("v"))
+    assert isinstance(out, errors.VisusWebError)
+    assert not isinstance(out, (errors.VisusTimeoutError, errors.TargetClosedError))

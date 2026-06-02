@@ -50,10 +50,15 @@ class SeleniumPageDelegate:
             raise errors.NavigationError(f"navigation to {url!r} failed: {exc}") from exc
         if wait_until in ("load", "domcontentloaded"):
             state = "complete" if wait_until == "load" else "interactive"
-            WebDriverWait(self._driver, timeout_ms / 1000).until(
-                lambda d: d.execute_script("return document.readyState")
-                in ("complete",) + (("interactive",) if state == "interactive" else ())
-            )
+            try:
+                WebDriverWait(self._driver, timeout_ms / 1000).until(
+                    lambda d: d.execute_script("return document.readyState")
+                    in ("complete",) + (("interactive",) if state == "interactive" else ())
+                )
+            except TimeoutException as exc:
+                raise errors.VisusTimeoutError(
+                    f"readyState wait for {url!r} timed out"
+                ) from exc
 
     def current_url(self) -> str:
         self._activate()
@@ -70,15 +75,24 @@ class SeleniumPageDelegate:
     def reload(self, *, timeout_ms: int) -> None:
         self._activate()
         self._driver.set_page_load_timeout(timeout_ms / 1000)
-        self._driver.refresh()
+        try:
+            self._driver.refresh()
+        except WebDriverException as exc:
+            raise translate_exc(exc) from exc
 
     def go_back(self, *, timeout_ms: int) -> None:
         self._activate()
-        self._driver.back()
+        try:
+            self._driver.back()
+        except WebDriverException as exc:
+            raise translate_exc(exc) from exc
 
     def go_forward(self, *, timeout_ms: int) -> None:
         self._activate()
-        self._driver.forward()
+        try:
+            self._driver.forward()
+        except WebDriverException as exc:
+            raise translate_exc(exc) from exc
 
     def close(self) -> None:
         if self._closed:
@@ -105,9 +119,16 @@ class SeleniumContextDelegate:
 
     def new_page(self) -> SeleniumPageDelegate:
         before = set(self._driver.window_handles)
-        self._driver.switch_to.new_window("tab")
-        new = (set(self._driver.window_handles) - before).pop()
-        page = SeleniumPageDelegate(self._driver, new)
+        try:
+            self._driver.switch_to.new_window("tab")
+        except WebDriverException as exc:
+            raise translate_exc(exc) from exc
+        new_handles = set(self._driver.window_handles) - before
+        if len(new_handles) != 1:
+            raise errors.VisusWebError(
+                f"expected exactly one new window handle, found {len(new_handles)}"
+            )
+        page = SeleniumPageDelegate(self._driver, new_handles.pop())
         self._pages.append(page)
         return page
 
