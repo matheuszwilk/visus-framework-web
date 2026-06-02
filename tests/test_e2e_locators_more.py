@@ -11,7 +11,7 @@ def page(browser, base_url):
 @pytest.mark.browser
 def test_get_by_label(page):
     assert page.get_by_label("Username").count() == 1
-    assert page.get_by_label("Email address").count() == 1   # via aria-label
+    assert page.get_by_label("Email address").count() == 1  # via aria-label
     assert page.get_by_label("Username").get_attribute("id") == "user"
 
 

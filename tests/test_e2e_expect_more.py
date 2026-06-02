@@ -24,8 +24,8 @@ def test_to_have_attribute(page):
 
 @pytest.mark.browser
 def test_to_have_class_and_contain_class(page):
-    expect(page.locator("#user")).to_have_class("field big")     # full class, exact
-    expect(page.locator("#user")).to_contain_class("big")        # single token
+    expect(page.locator("#user")).to_have_class("field big")  # full class, exact
+    expect(page.locator("#user")).to_contain_class("big")  # single token
 
 
 @pytest.mark.browser

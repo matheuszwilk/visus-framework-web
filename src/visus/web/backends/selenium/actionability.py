@@ -32,6 +32,7 @@ def _query_strict(
     driver: WebDriver, ensure_bundle: Callable[[], None], selector: str
 ) -> WebElement | None:
     from visus.web.backends.selenium.resolver import resolve_strict
+
     return resolve_strict(driver, ensure_bundle, selector)
 
 

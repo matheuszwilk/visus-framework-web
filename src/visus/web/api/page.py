@@ -61,7 +61,7 @@ class Page:
     def locator(self, selector: str) -> Locator:
         return Locator(self._delegate, (), self._defaults).locator(selector)
 
-    def frame_locator(self, selector: str) -> "FrameLocator":
+    def frame_locator(self, selector: str) -> FrameLocator:
         from visus.web.api.frame_locator import FrameLocator, _frame_step
 
         return FrameLocator(self._delegate, (_frame_step(selector),), self._defaults)
@@ -97,9 +97,7 @@ class Page:
         return data
 
     @contextmanager
-    def expect_popup(
-        self, *, timeout: int | None = None
-    ) -> Generator[_ValueHolder, None, None]:
+    def expect_popup(self, *, timeout: int | None = None) -> Generator[_ValueHolder, None, None]:
         """Context manager that captures the new Page opened as a popup."""
         before = self._delegate.snapshot_handles()
         holder: _ValueHolder = _ValueHolder()

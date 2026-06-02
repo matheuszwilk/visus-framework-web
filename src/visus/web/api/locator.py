@@ -54,7 +54,7 @@ class Locator:
             return self._child({"kind": "xpath", "value": selector})
         return self._child({"kind": "css", "value": selector})
 
-    def frame_locator(self, selector: str) -> "FrameLocator":
+    def frame_locator(self, selector: str) -> FrameLocator:
         from visus.web.api.frame_locator import FrameLocator, _frame_step
 
         return FrameLocator(self._delegate, self._steps + (_frame_step(selector),), self._defaults)
@@ -129,10 +129,17 @@ class Locator:
             self._encoded, checked, timeout_ms=self._t(timeout), force=force
         )
 
-    def select_option(self, *, value: str | None = None, label: str | None = None,
-                      index: int | None = None, timeout: int | None = None) -> None:
+    def select_option(
+        self,
+        *,
+        value: str | None = None,
+        label: str | None = None,
+        index: int | None = None,
+        timeout: int | None = None,
+    ) -> None:
         self._delegate.locator_select_option(
-            self._encoded, value=value, label=label, index=index, timeout_ms=self._t(timeout))
+            self._encoded, value=value, label=label, index=index, timeout_ms=self._t(timeout)
+        )
 
     def press(self, key: str, *, timeout: int | None = None) -> None:
         self._delegate.locator_press(self._encoded, key, timeout_ms=self._t(timeout))

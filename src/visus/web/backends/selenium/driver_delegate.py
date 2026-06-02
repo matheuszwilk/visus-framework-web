@@ -26,10 +26,18 @@ from visus.web.backends.selenium.expect_engine import run_expect
 from visus.web.backends.selenium.js import BUNDLE_JS
 
 _KEYMAP = {
-    "Enter": Keys.ENTER, "Tab": Keys.TAB, "Escape": Keys.ESCAPE, "Backspace": Keys.BACK_SPACE,
-    "Delete": Keys.DELETE, "ArrowUp": Keys.ARROW_UP, "ArrowDown": Keys.ARROW_DOWN,
-    "ArrowLeft": Keys.ARROW_LEFT, "ArrowRight": Keys.ARROW_RIGHT, "Space": " ",
-    "Home": Keys.HOME, "End": Keys.END,
+    "Enter": Keys.ENTER,
+    "Tab": Keys.TAB,
+    "Escape": Keys.ESCAPE,
+    "Backspace": Keys.BACK_SPACE,
+    "Delete": Keys.DELETE,
+    "ArrowUp": Keys.ARROW_UP,
+    "ArrowDown": Keys.ARROW_DOWN,
+    "ArrowLeft": Keys.ARROW_LEFT,
+    "ArrowRight": Keys.ARROW_RIGHT,
+    "Space": " ",
+    "Home": Keys.HOME,
+    "End": Keys.END,
 }
 _MODMAP = {"Control": Keys.CONTROL, "Shift": Keys.SHIFT, "Alt": Keys.ALT, "Meta": Keys.META}
 
@@ -147,11 +155,13 @@ class SeleniumPageDelegate:
     def _resolve_all(self, selector: str) -> list[object]:
         self._activate()
         from visus.web.backends.selenium.resolver import resolve_elements
+
         return cast(list[object], resolve_elements(self._driver, self._ensure_bundle, selector))
 
     def _resolve_strict(self, selector: str) -> object | None:
         self._activate()
         from visus.web.backends.selenium.resolver import resolve_strict
+
         return resolve_strict(self._driver, self._ensure_bundle, selector)
 
     def locator_count(self, selector: str) -> int:
@@ -253,7 +263,12 @@ class SeleniumPageDelegate:
                 ActionChains(self._driver).move_to_element(el).click().perform()
 
         run_action(
-            self._driver, selector, "check", timeout_ms=timeout_ms, force=force, dispatch=_do,
+            self._driver,
+            selector,
+            "check",
+            timeout_ms=timeout_ms,
+            force=force,
+            dispatch=_do,
             ensure_bundle=self._ensure_bundle,
         )
 
@@ -309,7 +324,12 @@ class SeleniumPageDelegate:
                 el.send_keys(main)
 
         run_action(
-            self._driver, selector, "press", timeout_ms=timeout_ms, force=False, dispatch=_do,
+            self._driver,
+            selector,
+            "press",
+            timeout_ms=timeout_ms,
+            force=False,
+            dispatch=_do,
             ensure_bundle=self._ensure_bundle,
         )
 
@@ -364,7 +384,12 @@ class SeleniumPageDelegate:
             ActionChains(self._driver).click_and_hold(src).move_to_element(tgt).release().perform()
 
         run_action(
-            self._driver, selector, "drag", timeout_ms=timeout_ms, force=False, dispatch=_do,
+            self._driver,
+            selector,
+            "drag",
+            timeout_ms=timeout_ms,
+            force=False,
+            dispatch=_do,
             ensure_bundle=self._ensure_bundle,
         )
 
@@ -502,9 +527,7 @@ class SeleniumPageDelegate:
                 handle = new.pop()
                 return SeleniumPageDelegate(self._driver, handle)
             if time.monotonic() >= deadline:
-                raise errors.VisusTimeoutError(
-                    f"no new popup appeared within {timeout_ms} ms"
-                )
+                raise errors.VisusTimeoutError(f"no new popup appeared within {timeout_ms} ms")
             time.sleep(0.05)
 
     def handle_next_dialog(
@@ -515,9 +538,7 @@ class SeleniumPageDelegate:
         try:
             WebDriverWait(self._driver, timeout_ms / 1000).until(EC.alert_is_present())
         except TimeoutException as exc:
-            raise errors.VisusTimeoutError(
-                f"no dialog appeared within {timeout_ms} ms"
-            ) from exc
+            raise errors.VisusTimeoutError(f"no dialog appeared within {timeout_ms} ms") from exc
         alert = self._driver.switch_to.alert
         message = alert.text
         if prompt_text is not None:

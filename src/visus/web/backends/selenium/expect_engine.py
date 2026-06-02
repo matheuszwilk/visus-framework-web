@@ -8,7 +8,6 @@ from time import monotonic, sleep
 from typing import cast
 
 from selenium.webdriver.remote.webdriver import WebDriver
-from selenium.webdriver.remote.webelement import WebElement
 
 from visus.web import errors
 
