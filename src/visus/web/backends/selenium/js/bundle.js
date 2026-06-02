@@ -163,6 +163,34 @@
     return exact ? an === v : an.toLowerCase().indexOf(v.toLowerCase()) >= 0;
   }
 
+  function attrText(el, attr) { return normWs(el.getAttribute(attr) || ""); }
+  function matchAttr(el, attr, value, exact) {
+    var a = attrText(el, attr), v = normWs(value);
+    return exact ? a === v : a.toLowerCase().indexOf(v.toLowerCase()) >= 0;
+  }
+  function labelText(el) {
+    var lb = el.getAttribute("aria-labelledby");
+    if (lb) {
+      var t = normWs(lb.split(/\s+/).map(function (id) {
+        var e = document.getElementById(id); return e ? normText(e) : "";
+      }).join(" "));
+      if (t) return t;
+    }
+    var al = el.getAttribute("aria-label");
+    if (al && al.trim()) return normWs(al);
+    if (el.id) {
+      var f = document.querySelector('label[for="' + (window.CSS && CSS.escape ? CSS.escape(el.id) : el.id) + '"]');
+      if (f) return normText(f);
+    }
+    if (el.closest) { var w = el.closest("label"); if (w) return normText(w); }
+    return "";
+  }
+  function matchLabel(el, value, exact) {
+    if (!isLabelable(el)) return false;
+    var l = labelText(el), v = normWs(value);
+    return exact ? l === v : l.toLowerCase().indexOf(v.toLowerCase()) >= 0;
+  }
+
   function dedupe(els) {
     var seen = [], out = [];
     for (var i = 0; i < els.length; i++) {
@@ -221,6 +249,32 @@
         for (r = 0; r < roots.length; r++) {
           if (roots[r] !== document && matchText(roots[r], step.value, false)) out.push(roots[r]);
         }
+      } else if (step.kind === "label") {
+        for (r = 0; r < roots.length; r++) {
+          base = roots[r]; all = base.querySelectorAll("*");
+          for (j = 0; j < all.length; j++) { e = all[j]; if (matchLabel(e, step.value, step.exact)) out.push(e); }
+        }
+      } else if (step.kind === "placeholder") {
+        for (r = 0; r < roots.length; r++) {
+          base = roots[r]; all = base.querySelectorAll("[placeholder]");
+          for (j = 0; j < all.length; j++) { e = all[j]; if (matchAttr(e, "placeholder", step.value, step.exact)) out.push(e); }
+        }
+      } else if (step.kind === "alt") {
+        for (r = 0; r < roots.length; r++) {
+          base = roots[r]; all = base.querySelectorAll("[alt]");
+          for (j = 0; j < all.length; j++) { e = all[j]; if (matchAttr(e, "alt", step.value, step.exact)) out.push(e); }
+        }
+      } else if (step.kind === "title") {
+        for (r = 0; r < roots.length; r++) {
+          base = roots[r]; all = base.querySelectorAll("[title]");
+          for (j = 0; j < all.length; j++) { e = all[j]; if (matchAttr(e, "title", step.value, step.exact)) out.push(e); }
+        }
+      } else if (step.kind === "testid") {
+        var attr = step.attr || "data-testid";
+        for (r = 0; r < roots.length; r++) {
+          base = roots[r]; all = base.querySelectorAll("[" + attr + "]");
+          for (j = 0; j < all.length; j++) { e = all[j]; if (attrText(e, attr) === normWs(step.value)) out.push(e); }
+        }
       } else if (step.kind === "nth") {
         var arr = roots.filter(function (x) { return x !== document; });
         var idx = step.index < 0 ? arr.length + step.index : step.index;
@@ -257,6 +311,7 @@
     role: computeRole,
     accessibleName: accessibleName,
     normText: normText,
+    attrText: attrText,
     clickablePoint: clickablePoint,
     hitTarget: hitTarget,
     checkStable: checkStable,
