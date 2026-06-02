@@ -26,7 +26,7 @@ class Match:
 
 def find_image(
     haystack: ImageInput, needle: ImageInput, *, confidence: float = 0.8
-) -> "Match | None":
+) -> Match | None:
     import cv2
 
     h = _to_gray(haystack)
@@ -43,7 +43,7 @@ def find_image(
 
 def find_all_images(
     haystack: ImageInput, needle: ImageInput, *, confidence: float = 0.8
-) -> list["Match"]:
+) -> list[Match]:
     import cv2
     import numpy as np
 
@@ -55,7 +55,7 @@ def find_all_images(
     nh, nw = n.shape[:2]
     ys, xs = np.where(res >= confidence)
     candidates = sorted(
-        ((int(x), int(y), float(res[y, x])) for x, y in zip(xs, ys)),
+        ((int(x), int(y), float(res[y, x])) for x, y in zip(xs, ys, strict=True)),
         key=lambda c: -c[2],
     )
     accepted: list[Match] = []

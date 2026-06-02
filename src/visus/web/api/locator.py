@@ -204,4 +204,4 @@ class Locator:
     def find_image(self, template: object, *, confidence: float = 0.8) -> object:
         from visus.web.vision import find_image
 
-        return find_image(self.screenshot(), template, confidence=confidence)
+        return find_image(self.screenshot(), template, confidence=confidence)  # type: ignore[arg-type]

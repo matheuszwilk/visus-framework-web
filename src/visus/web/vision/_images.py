@@ -15,7 +15,7 @@ from PIL import Image
 ImageInput = Union[str, Path, bytes, bytearray, "np.ndarray", Image.Image]
 
 
-def _to_ndarray(image: ImageInput) -> "np.ndarray":
+def _to_ndarray(image: ImageInput) -> np.ndarray:
     if isinstance(image, np.ndarray):
         return image
     if isinstance(image, Image.Image):
@@ -35,7 +35,7 @@ def _to_ndarray(image: ImageInput) -> "np.ndarray":
     raise TypeError(f"unsupported image type: {type(image)!r}")
 
 
-def _to_gray(image: ImageInput) -> "np.ndarray":
+def _to_gray(image: ImageInput) -> np.ndarray:
     import cv2
 
     return cv2.cvtColor(_to_ndarray(image), cv2.COLOR_RGB2GRAY)
