@@ -555,6 +555,15 @@ class SeleniumPageDelegate:
         self._ensure_bundle()
         return cast(list[dict], self._driver.execute_script("return window.__visus.snapshot();"))  # type: ignore[type-arg]
 
+    def pdf(self) -> bytes:
+        """Print the current page to PDF via CDP printToPDF."""
+        self._activate()
+        res = cast(
+            dict[str, object],
+            self._driver.execute_cdp_cmd("Page.printToPDF", {"printBackground": True}),
+        )
+        return base64.b64decode(cast(str, res["data"]))
+
 
 class SeleniumContextDelegate:
     """S0: a non-isolated grouping over one driver. Real isolation arrives in S4 (BiDi)."""

@@ -89,6 +89,9 @@ class _FakePage:
     def snapshot(self):
         return []
 
+    def pdf(self):
+        return b""
+
 
 class _FakeContext:
     def new_page(self):

@@ -100,6 +100,13 @@ class Page:
             Path(path).write_bytes(data)
         return data
 
+    def pdf(self, *, path: str | None = None) -> bytes:
+        """Print the current page to PDF (Chromium only, via CDP printToPDF)."""
+        data = self._delegate.pdf()
+        if path is not None:
+            Path(path).write_bytes(data)
+        return data
+
     # --- vision hooks (lazy-import; requires [vision] extra) ---
     def solve_captcha(self, locator: Locator, *, preprocess: bool = True) -> str:
         from visus.web.vision import solve_captcha
