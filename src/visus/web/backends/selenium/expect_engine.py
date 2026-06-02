@@ -66,6 +66,42 @@ def _evaluate(
         if spec["exact"]:
             return (actual == want, actual)
         return (want.lower() in actual.lower(), actual)
+    if matcher == "value":
+        if not els:
+            return (False, "not present")
+        if len(els) > 1:
+            raise errors.StrictModeViolation("assertion locator matched multiple elements")
+        actual = cast(str, driver.execute_script("return arguments[0].value;", els[0]) or "")
+        spec = cast("dict[str, object]", arg)
+        return (actual == spec["value"], actual)
+    if matcher == "attribute":
+        if not els:
+            return (False, "not present")
+        if len(els) > 1:
+            raise errors.StrictModeViolation("assertion locator matched multiple elements")
+        spec = cast("dict[str, object]", arg)
+        actual = driver.execute_script(
+            "return arguments[0].getAttribute(arguments[1]);", els[0], spec["name"]
+        )
+        return (actual == spec["value"], actual)
+    if matcher == "class":
+        if not els:
+            return (False, "not present")
+        if len(els) > 1:
+            raise errors.StrictModeViolation("assertion locator matched multiple elements")
+        spec = cast("dict[str, object]", arg)
+        cls = cast(str, driver.execute_script("return arguments[0].getAttribute('class') || '';", els[0]))
+        if spec["mode"] == "contains":
+            return (cast(str, spec["value"]) in cls.split(), cls)
+        return (_norm_ws(cls) == _norm_ws(cast(str, spec["value"])), cls)
+    if matcher == "role":
+        if not els:
+            return (False, "not present")
+        if len(els) > 1:
+            raise errors.StrictModeViolation("assertion locator matched multiple elements")
+        spec = cast("dict[str, object]", arg)
+        actual = driver.execute_script("return window.__visus.role(arguments[0]);", els[0])
+        return (actual == spec["value"], actual)
     raise ValueError(f"unknown matcher: {matcher}")
 
 
