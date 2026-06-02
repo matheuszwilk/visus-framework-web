@@ -21,3 +21,11 @@ class NavigationError(VisusWebError):
 
 class TargetClosedError(VisusWebError):
     """Raised when operating on a page/context/browser that is already closed."""
+
+
+class StrictModeViolation(VisusWebError):
+    """Raised when a strict locator resolves to more than one element."""
+
+
+class ElementNotFoundError(VisusWebError):
+    """Raised when a locator resolves to zero elements where one was required."""

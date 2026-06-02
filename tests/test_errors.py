@@ -21,3 +21,8 @@ def test_base_is_exception():
 def test_raisable_with_message():
     with pytest.raises(errors.NavigationError, match="boom"):
         raise errors.NavigationError("boom")
+
+
+def test_strict_and_not_found_subclass_base():
+    assert issubclass(errors.StrictModeViolation, errors.VisusWebError)
+    assert issubclass(errors.ElementNotFoundError, errors.VisusWebError)
