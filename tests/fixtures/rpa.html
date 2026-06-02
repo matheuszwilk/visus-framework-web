@@ -1,0 +1,13 @@
+<!doctype html>
+<html><head><title>rpa fixture</title></head>
+<body>
+  <div id="box">hello box</div>
+  <input type="file" id="up" />
+  <span id="upname"></span>
+  <script>
+    document.getElementById('up').addEventListener('change', function(e){
+      var f = e.target.files[0];
+      document.getElementById('upname').textContent = f ? f.name : '';
+    });
+  </script>
+</body></html>

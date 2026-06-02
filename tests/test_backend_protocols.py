@@ -63,6 +63,19 @@ class _FakePage:
         return None
 
     def expect_poll(self, selector, matcher, arg, *, is_not, timeout_ms): ...
+    def evaluate(self, expression, arg):
+        return None
+
+    def locator_evaluate(self, selector, expression, arg):
+        return None
+
+    def screenshot(self, *, full_page):
+        return b""
+
+    def locator_screenshot(self, selector):
+        return b""
+
+    def locator_set_input_files(self, selector, paths): ...
 
 
 class _FakeContext:
@@ -73,6 +86,11 @@ class _FakeContext:
         return []
 
     def close(self): ...
+    def cookies(self):
+        return []
+
+    def add_cookies(self, cookies): ...
+    def clear_cookies(self): ...
 
 
 class _FakeBrowser:
