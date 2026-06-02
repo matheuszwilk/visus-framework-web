@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import base64
+import os
 from typing import cast
 
 from selenium.common.exceptions import (
@@ -406,6 +408,68 @@ class SeleniumPageDelegate:
         self._ensure_bundle()
         run_expect(self._driver, selector, matcher, arg, is_not=is_not, timeout_ms=timeout_ms)
 
+    def evaluate(self, expression: str, arg: object) -> object:
+        self._activate()
+        script = f"return ({expression})(arguments[0]);"
+        return cast(object, self._driver.execute_script(script, arg))
+
+    def locator_evaluate(self, selector: str, expression: str, arg: object) -> object:
+        self._activate()
+        self._ensure_bundle()
+        el = self._resolve_strict(selector)
+        if el is None:
+            raise errors.ElementNotFoundError(f"no element for evaluate: {selector}")
+        return cast(
+            object,
+            self._driver.execute_script(
+                f"return ({expression})(arguments[0], arguments[1]);", el, arg
+            ),
+        )
+
+    def screenshot(self, *, full_page: bool) -> bytes:
+        self._activate()
+        if not full_page:
+            return self._driver.get_screenshot_as_png()
+        metrics = cast(
+            dict[str, object],
+            self._driver.execute_cdp_cmd("Page.getLayoutMetrics", {}),
+        )
+        size = cast(dict[str, object], metrics["cssContentSize"])
+        shot = cast(
+            dict[str, object],
+            self._driver.execute_cdp_cmd(
+                "Page.captureScreenshot",
+                {
+                    "captureBeyondViewport": True,
+                    "fromSurface": True,
+                    "clip": {
+                        "x": 0,
+                        "y": 0,
+                        "width": size["width"],
+                        "height": size["height"],
+                        "scale": 1,
+                    },
+                },
+            ),
+        )
+        return base64.b64decode(cast(str, shot["data"]))
+
+    def locator_screenshot(self, selector: str) -> bytes:
+        self._activate()
+        self._ensure_bundle()
+        el = self._resolve_strict(selector)
+        if el is None:
+            raise errors.ElementNotFoundError(f"no element for screenshot: {selector}")
+        return cast(WebElement, el).screenshot_as_png
+
+    def locator_set_input_files(self, selector: str, paths: list[str]) -> None:
+        self._activate()
+        self._ensure_bundle()
+        el = self._resolve_strict(selector)
+        if el is None:
+            raise errors.ElementNotFoundError(f"no element for set_input_files: {selector}")
+        cast(WebElement, el).send_keys("\n".join(os.path.abspath(p) for p in paths))
+
 
 class SeleniumContextDelegate:
     """S0: a non-isolated grouping over one driver. Real isolation arrives in S4 (BiDi)."""
@@ -437,3 +501,13 @@ class SeleniumContextDelegate:
     def close(self) -> None:
         for page in list(self._pages):
             page.close()
+
+    def cookies(self) -> list[dict]:  # type: ignore[type-arg]
+        return self._driver.get_cookies()
+
+    def add_cookies(self, cookies: list[dict]) -> None:  # type: ignore[type-arg]
+        for c in cookies:
+            self._driver.add_cookie(c)
+
+    def clear_cookies(self) -> None:
+        self._driver.delete_all_cookies()
