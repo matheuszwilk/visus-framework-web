@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from visus.web.api.locator import Locator
 from visus.web.backends.base import PageDelegate
 from visus.web.config import Defaults
 
@@ -47,3 +48,12 @@ class Page:
     @property
     def is_closed(self) -> bool:
         return self._delegate.is_closed()
+
+    def locator(self, selector: str) -> Locator:
+        return Locator(self._delegate, (), self._defaults).locator(selector)
+
+    def get_by_role(self, role: str, *, name: str | None = None, exact: bool = False) -> Locator:
+        return Locator(self._delegate, (), self._defaults).get_by_role(role, name=name, exact=exact)
+
+    def get_by_text(self, text: str, *, exact: bool = False) -> Locator:
+        return Locator(self._delegate, (), self._defaults).get_by_text(text, exact=exact)
