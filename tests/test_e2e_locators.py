@@ -38,9 +38,9 @@ def test_get_by_role_textbox_via_label(page):
 
 @pytest.mark.browser
 def test_get_by_text_substring_and_exact(page):
-    assert page.get_by_text("Welcome back").count() == 1          # substring, ci
-    assert page.get_by_text("welcome back, ada").count() == 1     # case-insensitive
-    assert page.get_by_text("Welcome", exact=True).count() == 0   # exact requires full text
+    assert page.get_by_text("Welcome back").count() == 1  # substring, ci
+    assert page.get_by_text("welcome back, ada").count() == 1  # case-insensitive
+    assert page.get_by_text("Welcome", exact=True).count() == 0  # exact requires full text
     assert page.get_by_text("Welcome back, Ada", exact=True).count() == 1
 
 
@@ -57,7 +57,7 @@ def test_strict_mode_violation_on_multiple(page):
     dup = page.get_by_text("repeat")
     assert dup.count() == 2
     with pytest.raises(errors.StrictModeViolation):
-        dup.is_visible()          # strict single-element read on 2 matches
+        dup.is_visible()  # strict single-element read on 2 matches
     with pytest.raises(errors.StrictModeViolation):
         dup.text_content()
 
@@ -75,7 +75,7 @@ def test_chaining_scopes_to_descendants(page):
     # text "Profile"/"Logout" only inside ul.menu
     menu = page.locator("ul.menu")
     assert menu.get_by_text("Logout").count() == 1
-    assert menu.get_by_text("Dashboard").count() == 0   # heading is outside the menu
+    assert menu.get_by_text("Dashboard").count() == 0  # heading is outside the menu
 
 
 @pytest.mark.browser

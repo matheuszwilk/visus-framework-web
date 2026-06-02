@@ -174,7 +174,11 @@ class SeleniumPageDelegate:
         self._activate()
         self._ensure_bundle()
         run_action(
-            self._driver, selector, "click", timeout_ms=timeout_ms, force=force,
+            self._driver,
+            selector,
+            "click",
+            timeout_ms=timeout_ms,
+            force=force,
             dispatch=lambda el: ActionChains(self._driver).move_to_element(el).click().perform(),
         )
 
@@ -186,7 +190,14 @@ class SeleniumPageDelegate:
             el.clear()
             el.send_keys(value)
 
-        run_action(self._driver, selector, "fill", timeout_ms=timeout_ms, force=force, dispatch=_do_fill)
+        run_action(
+            self._driver,
+            selector,
+            "fill",
+            timeout_ms=timeout_ms,
+            force=force,
+            dispatch=_do_fill,
+        )
 
     def locator_input_value(self, selector: str) -> str:
         self._activate()

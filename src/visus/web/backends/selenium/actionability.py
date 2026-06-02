@@ -19,9 +19,10 @@ _BACKOFF: tuple[float, ...] = (0.0, 0.02, 0.1, 0.1, 0.5)
 
 
 def _query_strict(driver: WebDriver, selector: str) -> WebElement | None:
-    els = cast(list[WebElement], driver.execute_script(
-        "return window.__visus.queryAll(arguments[0]);", selector
-    ))
+    els = cast(
+        list[WebElement],
+        driver.execute_script("return window.__visus.queryAll(arguments[0]);", selector),
+    )
     if len(els) > 1:
         raise errors.StrictModeViolation(
             f"locator resolved to {len(els)} elements; use first()/last()/nth()"
@@ -29,29 +30,47 @@ def _query_strict(driver: WebDriver, selector: str) -> WebElement | None:
     return els[0] if els else None
 
 
-def _blocking_reason(driver: WebDriver, el: WebElement, states: tuple[str, ...], name: str) -> str | None:
+def _blocking_reason(
+    driver: WebDriver,
+    el: WebElement,
+    states: tuple[str, ...],
+    name: str,
+) -> str | None:
     for st in states:
         if st == "stable":
-            stable = bool(driver.execute_async_script(
-                "var el=arguments[0],cb=arguments[arguments.length-1];"
-                "window.__visus.checkStable(el, cb);",
-                el,
-            ))
+            stable = bool(
+                driver.execute_async_script(
+                    "var el=arguments[0],cb=arguments[arguments.length-1];"
+                    "window.__visus.checkStable(el, cb);",
+                    el,
+                )
+            )
             if not stable:
                 return "not stable (still animating)"
             continue
-        res = cast(dict, driver.execute_script(
-            "return window.__visus.elementState(arguments[0],arguments[1]);", el, st
-        ))
+        res = cast(
+            dict[str, object],
+            driver.execute_script(
+                "return window.__visus.elementState(arguments[0],arguments[1]);", el, st
+            ),
+        )
         if not res["matches"]:
             return f"not {st} ({res['received']})"
     if name == "click":
-        driver.execute_script("arguments[0].scrollIntoView({block:'center',inline:'center'});", el)
-        pt = cast(dict, driver.execute_script("return window.__visus.clickablePoint(arguments[0]);", el))
-        hit = bool(driver.execute_script(
-            "return window.__visus.hitTarget(arguments[0],arguments[1],arguments[2]);",
-            el, pt["x"], pt["y"],
-        ))
+        _SCROLL_JS = "arguments[0].scrollIntoView({block:'center',inline:'center'});"
+        driver.execute_script(_SCROLL_JS, el)
+        pt = cast(
+            dict[str, float],
+            driver.execute_script("return window.__visus.clickablePoint(arguments[0]);", el),
+        )
+        hit = bool(
+            driver.execute_script(
+                "return window.__visus.hitTarget(arguments[0],arguments[1],arguments[2]);",
+                el,
+                pt["x"],
+                pt["y"],
+            )
+        )
         if not hit:
             return "element intercepts pointer events (occluded)"
     return None
@@ -80,7 +99,9 @@ def run_action(
         if el is not None:
             reason = None if force else _blocking_reason(driver, el, states, name)
             if reason is None:
-                driver.execute_script("arguments[0].scrollIntoView({block:'center',inline:'center'});", el)
+                driver.execute_script(
+                    "arguments[0].scrollIntoView({block:'center',inline:'center'});", el
+                )
                 dispatch(el)
                 return
             last_reason = reason
