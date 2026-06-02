@@ -1,0 +1,15 @@
+<!doctype html>
+<html>
+  <head><title>overlay fixture</title>
+    <style>#overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:99;}</style>
+  </head>
+  <body>
+    <button id="under" onclick="ures.textContent='clicked'">Under</button>
+    <div id="ures"></div>
+    <div id="overlay"></div>
+    <script>
+      var ures = document.getElementById('ures');
+      setTimeout(function(){ var o=document.getElementById('overlay'); if(o) o.remove(); }, 700);
+    </script>
+  </body>
+</html>

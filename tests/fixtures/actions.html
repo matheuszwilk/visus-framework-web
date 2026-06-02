@@ -1,0 +1,28 @@
+<!doctype html>
+<html>
+  <head><title>actions fixture</title>
+    <style>.hidden{display:none;}</style>
+  </head>
+  <body>
+    <div id="count">0</div>
+    <button id="counter" onclick="count.textContent = String(+count.textContent + 1)">Increment</button>
+
+    <button id="delayed" class="hidden" onclick="dres.textContent='clicked'">Delayed</button>
+    <div id="dres"></div>
+
+    <button id="disabledbtn" disabled onclick="ebres.textContent='clicked'">EnableLater</button>
+    <div id="ebres"></div>
+
+    <input id="name" type="text" />
+    <input id="ro" type="text" readonly />
+
+    <script>
+      var count = document.getElementById('count');
+      var dres = document.getElementById('dres');
+      var ebres = document.getElementById('ebres');
+      setTimeout(function(){ document.getElementById('delayed').classList.remove('hidden'); }, 700);
+      setTimeout(function(){ document.getElementById('disabledbtn').removeAttribute('disabled'); }, 700);
+      setTimeout(function(){ document.getElementById('ro').removeAttribute('readonly'); }, 700);
+    </script>
+  </body>
+</html>
