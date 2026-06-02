@@ -1,7 +1,8 @@
-"""Event holder types for expect_popup / expect_dialog.  No selenium types here."""
+"""Event holder types for expect_popup / expect_dialog / expect_download."""
 
 from __future__ import annotations
 
+import shutil
 from dataclasses import dataclass
 from typing import Any
 
@@ -33,3 +34,18 @@ class Dialog:
 
     message: str
     type: str
+
+
+@dataclass(frozen=True)
+class Download:
+    """Immutable record of a completed browser download."""
+
+    path: str
+    suggested_filename: str
+
+    def save_as(self, target: str) -> None:
+        """Copy the downloaded file to *target* (parent dirs are created automatically)."""
+        import os
+
+        os.makedirs(os.path.dirname(os.path.abspath(target)), exist_ok=True)
+        shutil.copyfile(self.path, target)
