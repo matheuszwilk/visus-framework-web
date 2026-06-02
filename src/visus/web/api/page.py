@@ -96,6 +96,12 @@ class Page:
             Path(path).write_bytes(data)
         return data
 
+    # --- vision hooks (lazy-import; requires [vision] extra) ---
+    def solve_captcha(self, locator: Locator, *, preprocess: bool = True) -> str:
+        from visus.web.vision import solve_captcha
+
+        return solve_captcha(locator.screenshot(), preprocess=preprocess)
+
     @contextmanager
     def expect_popup(self, *, timeout: int | None = None) -> Generator[_ValueHolder, None, None]:
         """Context manager that captures the new Page opened as a popup."""

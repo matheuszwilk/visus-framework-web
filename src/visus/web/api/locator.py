@@ -194,3 +194,14 @@ class Locator:
     def set_input_files(self, files: str | list[str]) -> None:
         paths = [files] if isinstance(files, str) else list(files)
         self._delegate.locator_set_input_files(self._encoded, paths)
+
+    # --- vision hooks (lazy-import; requires [vision] extra) ---
+    def ocr_text(self) -> str:
+        from visus.web.vision import read_text
+
+        return read_text(self.screenshot())
+
+    def find_image(self, template: object, *, confidence: float = 0.8) -> object:
+        from visus.web.vision import find_image
+
+        return find_image(self.screenshot(), template, confidence=confidence)
