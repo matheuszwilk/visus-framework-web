@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import os
+import time
 from typing import cast
 
 from selenium.common.exceptions import (
@@ -15,6 +16,7 @@ from selenium.webdriver import ActionChains
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.remote.webdriver import WebDriver
 from selenium.webdriver.remote.webelement import WebElement
+from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import Select, WebDriverWait
 
 from visus.web import errors
@@ -469,6 +471,50 @@ class SeleniumPageDelegate:
         if el is None:
             raise errors.ElementNotFoundError(f"no element for set_input_files: {selector}")
         cast(WebElement, el).send_keys("\n".join(os.path.abspath(p) for p in paths))
+
+    # ------------------------------------------------------------------
+    # Popup / dialog event helpers
+    # ------------------------------------------------------------------
+
+    def snapshot_handles(self) -> list[str]:
+        """Return the current list of window handles."""
+        return list(self._driver.window_handles)
+
+    def adopt_new_handle(self, before: list[str], *, timeout_ms: int) -> PageDelegate:
+        """Poll until a new window handle appears; return a delegate for it."""
+        deadline = time.monotonic() + timeout_ms / 1000
+        before_set = set(before)
+        while True:
+            new = set(self._driver.window_handles) - before_set
+            if new:
+                handle = new.pop()
+                return SeleniumPageDelegate(self._driver, handle)
+            if time.monotonic() >= deadline:
+                raise errors.VisusTimeoutError(
+                    f"no new popup appeared within {timeout_ms} ms"
+                )
+            time.sleep(0.05)
+
+    def handle_next_dialog(
+        self, *, accept: bool, prompt_text: str | None, timeout_ms: int
+    ) -> tuple[str, str]:
+        """Wait for an alert/confirm/prompt dialog, handle it, return (message, type)."""
+        self._activate()
+        try:
+            WebDriverWait(self._driver, timeout_ms / 1000).until(EC.alert_is_present())
+        except TimeoutException as exc:
+            raise errors.VisusTimeoutError(
+                f"no dialog appeared within {timeout_ms} ms"
+            ) from exc
+        alert = self._driver.switch_to.alert
+        message = alert.text
+        if prompt_text is not None:
+            alert.send_keys(prompt_text)
+        if accept:
+            alert.accept()
+        else:
+            alert.dismiss()
+        return (message, "dialog")
 
 
 class SeleniumContextDelegate:
