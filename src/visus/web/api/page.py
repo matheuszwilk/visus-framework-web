@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+from collections.abc import Generator
+from contextlib import contextmanager
 from pathlib import Path
 
+from visus.web.api.events import Dialog, _ValueHolder
 from visus.web.api.locator import Locator
 from visus.web.backends.base import PageDelegate
 from visus.web.config import Defaults
@@ -83,3 +86,35 @@ class Page:
         if path is not None:
             Path(path).write_bytes(data)
         return data
+
+    @contextmanager
+    def expect_popup(
+        self, *, timeout: int | None = None
+    ) -> Generator[_ValueHolder, None, None]:
+        """Context manager that captures the new Page opened as a popup."""
+        before = self._delegate.snapshot_handles()
+        holder: _ValueHolder = _ValueHolder()
+        yield holder
+        new_delegate = self._delegate.adopt_new_handle(
+            before,
+            timeout_ms=timeout if timeout is not None else self._defaults.action_timeout_ms,
+        )
+        holder._set(Page(new_delegate, self._defaults))
+
+    @contextmanager
+    def expect_dialog(
+        self,
+        *,
+        accept: bool = True,
+        prompt_text: str | None = None,
+        timeout: int | None = None,
+    ) -> Generator[_ValueHolder, None, None]:
+        """Context manager that handles the next browser dialog and captures its details."""
+        holder: _ValueHolder = _ValueHolder()
+        yield holder
+        msg, typ = self._delegate.handle_next_dialog(
+            accept=accept,
+            prompt_text=prompt_text,
+            timeout_ms=timeout if timeout is not None else self._defaults.action_timeout_ms,
+        )
+        holder._set(Dialog(message=msg, type=typ))
