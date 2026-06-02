@@ -1,6 +1,9 @@
 import json
 
 from visus.web.api.locator import Locator
+from visus.web.config import Defaults
+
+_DEFAULTS = Defaults()
 
 
 class _RecordingDelegate:
@@ -19,6 +22,16 @@ class _RecordingDelegate:
         self.last = selector
         return None
 
+    def locator_click(self, selector, *, timeout_ms, force):
+        self.last = selector
+
+    def locator_fill(self, selector, value, *, timeout_ms, force):
+        self.last = selector
+
+    def locator_input_value(self, selector):
+        self.last = selector
+        return ""
+
 
 def _steps(loc):
     return json.loads(loc._encoded)
@@ -26,7 +39,7 @@ def _steps(loc):
 
 def test_get_by_role_appends_step_immutably():
     d = _RecordingDelegate()
-    root = Locator(d, (), None)
+    root = Locator(d, (), _DEFAULTS)
     btn = root.get_by_role("button", name="Sign in")
     assert _steps(root) == []  # original unchanged
     assert _steps(btn) == [{"kind": "role", "role": "button", "name": "Sign in", "exact": False}]
@@ -34,7 +47,7 @@ def test_get_by_role_appends_step_immutably():
 
 def test_chaining_and_nth_and_text():
     d = _RecordingDelegate()
-    loc = Locator(d, (), None).locator("ul.menu").get_by_text("Logout").first()
+    loc = Locator(d, (), _DEFAULTS).locator("ul.menu").get_by_text("Logout").first()
     assert _steps(loc) == [
         {"kind": "css", "value": "ul.menu"},
         {"kind": "text", "value": "Logout", "exact": False},
@@ -44,32 +57,32 @@ def test_chaining_and_nth_and_text():
 
 def test_locator_detects_xpath():
     d = _RecordingDelegate()
-    loc = Locator(d, (), None).locator("//a[@id='x']")
+    loc = Locator(d, (), _DEFAULTS).locator("//a[@id='x']")
     assert _steps(loc) == [{"kind": "xpath", "value": "//a[@id='x']"}]
 
 
 def test_count_passes_encoded_steps_to_delegate():
     d = _RecordingDelegate()
-    Locator(d, (), None).get_by_text("Hi").count()
+    Locator(d, (), _DEFAULTS).get_by_text("Hi").count()
     assert json.loads(d.last) == [{"kind": "text", "value": "Hi", "exact": False}]
 
 
 def test_locator_xpath_prefix():
     d = _RecordingDelegate()
-    loc = Locator(d, (), None).locator("xpath=//div")
+    loc = Locator(d, (), _DEFAULTS).locator("xpath=//div")
     assert _steps(loc) == [{"kind": "xpath", "value": "//div"}]
 
 
 def test_filter_with_no_args_returns_same_locator():
     d = _RecordingDelegate()
-    loc = Locator(d, (), None).get_by_text("foo")
+    loc = Locator(d, (), _DEFAULTS).get_by_text("foo")
     filtered = loc.filter()
     assert _steps(filtered) == _steps(loc)
 
 
 def test_first_last_nth_steps():
     d = _RecordingDelegate()
-    base = Locator(d, (), None).get_by_text("item")
+    base = Locator(d, (), _DEFAULTS).get_by_text("item")
     text_step = {"kind": "text", "value": "item", "exact": False}
     assert _steps(base.first()) == [text_step, {"kind": "nth", "index": 0}]
     assert _steps(base.last()) == [text_step, {"kind": "nth", "index": -1}]

@@ -15,7 +15,7 @@ class Locator:
         self,
         delegate: PageDelegate,
         steps: tuple[dict[str, object], ...],
-        defaults: Defaults | None,
+        defaults: Defaults,
     ) -> None:
         self._delegate = delegate
         self._steps = tuple(steps)
@@ -65,3 +65,22 @@ class Locator:
 
     def text_content(self) -> str | None:
         return self._delegate.locator_text_content(self._encoded)
+
+    # --- actions (auto-wait via actionability loop in the delegate) ---
+    def click(self, *, timeout: int | None = None, force: bool = False) -> None:
+        self._delegate.locator_click(
+            self._encoded,
+            timeout_ms=timeout if timeout is not None else self._defaults.action_timeout_ms,
+            force=force,
+        )
+
+    def fill(self, value: str, *, timeout: int | None = None, force: bool = False) -> None:
+        self._delegate.locator_fill(
+            self._encoded,
+            value,
+            timeout_ms=timeout if timeout is not None else self._defaults.action_timeout_ms,
+            force=force,
+        )
+
+    def input_value(self) -> str:
+        return self._delegate.locator_input_value(self._encoded)

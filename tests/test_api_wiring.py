@@ -46,6 +46,15 @@ class FakePage:
     def locator_text_content(self, selector):
         return None
 
+    def locator_click(self, selector, *, timeout_ms, force):
+        pass
+
+    def locator_fill(self, selector, value, *, timeout_ms, force):
+        pass
+
+    def locator_input_value(self, selector):
+        return ""
+
 
 class FakeContext:
     def __init__(self):
