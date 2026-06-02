@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from visus.web import errors
+from visus.web.api.assertions import expect
 from visus.web.api.browser import Browser
 from visus.web.api.context import Context
 from visus.web.api.page import Page
@@ -15,6 +16,7 @@ __version__ = "0.0.1"
 
 __all__ = [
     "launch",
+    "expect",
     "Engine",
     "Browser",
     "Context",
