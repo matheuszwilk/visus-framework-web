@@ -1,5 +1,10 @@
+import pytest
+
 from visus.web.api.browser import Browser
+from visus.web.api.events import Dialog
+from visus.web.api.page import Page
 from visus.web.config import Defaults
+from visus.web.errors import VisusWebError
 
 
 class FakePage:
@@ -54,6 +59,15 @@ class FakePage:
 
     def locator_input_value(self, selector):
         return ""
+
+    def snapshot_handles(self):
+        return ["h1"]
+
+    def adopt_new_handle(self, before, *, timeout_ms):
+        return FakePage()
+
+    def handle_next_dialog(self, *, accept, prompt_text, timeout_ms):
+        return ("test msg", "dialog")
 
 
 class FakeContext:
@@ -151,3 +165,41 @@ def test_page_locator_entry_points_wiring():
     assert loc2.count() == 0
     loc3 = page.get_by_text("hello")
     assert loc3.count() == 0
+
+
+def test_expect_popup_yields_holder_with_page():
+    bd = FakeBrowserDelegate()
+    browser = Browser(bd, Defaults())
+    page = browser.new_page()
+    with page.expect_popup() as info:
+        pass  # FakePage.adopt_new_handle returns a new FakePage
+    assert isinstance(info.value, Page)
+
+
+def test_expect_popup_holder_raises_before_exit():
+    bd = FakeBrowserDelegate()
+    browser = Browser(bd, Defaults())
+    page = browser.new_page()
+    with page.expect_popup() as info:
+        with pytest.raises(VisusWebError, match="not available until the block completes"):
+            _ = info.value
+
+
+def test_expect_dialog_yields_dialog_object():
+    bd = FakeBrowserDelegate()
+    browser = Browser(bd, Defaults())
+    page = browser.new_page()
+    with page.expect_dialog() as info:
+        pass
+    assert isinstance(info.value, Dialog)
+    assert info.value.message == "test msg"
+    assert info.value.type == "dialog"
+
+
+def test_expect_dialog_holder_raises_before_exit():
+    bd = FakeBrowserDelegate()
+    browser = Browser(bd, Defaults())
+    page = browser.new_page()
+    with page.expect_dialog() as info:
+        with pytest.raises(VisusWebError, match="not available until the block completes"):
+            _ = info.value

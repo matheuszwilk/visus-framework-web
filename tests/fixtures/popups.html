@@ -1,0 +1,8 @@
+<!doctype html><html><head><title>popups</title></head><body>
+<button id="pop" onclick="window.open('/forms.html','_blank')">open popup</button>
+<button id="alertbtn" onclick="setTimeout(function(){alert('hi there')},50)">alert</button>
+<button id="confirmbtn" onclick="setTimeout(function(){document.getElementById('cres').textContent = confirm('ok?') ? 'yes':'no'},50)">confirm</button>
+<div id="cres"></div>
+<button id="promptbtn" onclick="setTimeout(function(){document.getElementById('pres').textContent = prompt('name?') || ''},50)">prompt</button>
+<div id="pres"></div>
+</body></html>
