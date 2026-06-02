@@ -77,6 +77,15 @@ class _FakePage:
 
     def locator_set_input_files(self, selector, paths): ...
 
+    def snapshot_handles(self):
+        return []
+
+    def adopt_new_handle(self, before, *, timeout_ms):
+        return _FakePage()
+
+    def handle_next_dialog(self, *, accept, prompt_text, timeout_ms):
+        return ("", "dialog")
+
 
 class _FakeContext:
     def new_page(self):
