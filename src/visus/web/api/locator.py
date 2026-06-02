@@ -4,6 +4,7 @@ import json
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from visus.web.api.frame_locator import FrameLocator
     from visus.web.backends.base import PageDelegate
     from visus.web.config import Defaults
 
@@ -52,6 +53,11 @@ class Locator:
         if selector.startswith("//") or selector.startswith("("):
             return self._child({"kind": "xpath", "value": selector})
         return self._child({"kind": "css", "value": selector})
+
+    def frame_locator(self, selector: str) -> "FrameLocator":
+        from visus.web.api.frame_locator import FrameLocator, _frame_step
+
+        return FrameLocator(self._delegate, self._steps + (_frame_step(selector),), self._defaults)
 
     def filter(self, *, has_text: str | None = None) -> Locator:
         if has_text is not None:
