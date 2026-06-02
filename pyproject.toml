@@ -28,6 +28,12 @@ vision = [
     "pillow>=10.0.0",
     "numpy>=1.24.0",
 ]
+mcp = [
+    "mcp>=1.2.0",
+]
+
+[project.scripts]
+visus-web-mcp = "visus.web.mcp.server:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/visus"]
