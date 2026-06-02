@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import atexit
+import functools
 import shutil
 import tempfile
 import weakref
+from collections.abc import Callable
 
 from selenium.common.exceptions import WebDriverException
 
@@ -16,7 +18,10 @@ from visus.web.backends.selenium.driver_delegate import (
 )
 
 
-def _cleanup(driver_ref: "weakref.ref[object]", profile_dir: str) -> None:
+def _cleanup(
+    driver_ref: "weakref.ref[object]", profile_dir: str, download_dir: str
+) -> None:
+    """atexit safety net: quit a still-alive driver and remove its temp dirs."""
     driver = driver_ref()
     if driver is not None:
         try:
@@ -24,17 +29,26 @@ def _cleanup(driver_ref: "weakref.ref[object]", profile_dir: str) -> None:
         except Exception:
             pass
     shutil.rmtree(profile_dir, ignore_errors=True)
+    shutil.rmtree(download_dir, ignore_errors=True)
 
 
 class SeleniumBrowserDelegate:
-    def __init__(self, driver: object, profile_dir: str) -> None:
+    def __init__(self, driver: object, profile_dir: str, download_dir: str) -> None:
         self._driver = driver
         self._profile_dir = profile_dir
+        self._download_dir = download_dir
+        self._disposed = False
         self._contexts: list[SeleniumContextDelegate] = []
         # First context adopts the driver's initial window handle.
         initial = driver.current_window_handle
         self._contexts.append(SeleniumContextDelegate(driver, first_handle=initial))
-        atexit.register(_cleanup, weakref.ref(driver), profile_dir)
+        # Register a per-instance atexit cleanup so it can be unregistered precisely
+        # on dispose() (a bare _cleanup registration would be impossible to remove
+        # selectively, leaking handlers across many launches).
+        self._atexit_cleanup: Callable[[], None] = functools.partial(
+            _cleanup, weakref.ref(driver), profile_dir, download_dir
+        )
+        atexit.register(self._atexit_cleanup)
 
     def new_context(self) -> SeleniumContextDelegate:
         ctx = SeleniumContextDelegate(self._driver)
@@ -47,11 +61,16 @@ class SeleniumBrowserDelegate:
         return list(self._contexts)
 
     def dispose(self) -> None:
+        if self._disposed:
+            return
+        self._disposed = True
+        atexit.unregister(self._atexit_cleanup)
         try:
             self._driver.quit()
-        except WebDriverException:
+        except Exception:
             pass
         shutil.rmtree(self._profile_dir, ignore_errors=True)
+        shutil.rmtree(self._download_dir, ignore_errors=True)
 
 
 class SeleniumBackend:
@@ -66,5 +85,6 @@ class SeleniumBackend:
             driver = config.driver_factory(options=options, service=service)
         except WebDriverException as exc:
             shutil.rmtree(profile_dir, ignore_errors=True)
+            shutil.rmtree(download_dir, ignore_errors=True)
             raise translate_exc(exc) from exc
-        return SeleniumBrowserDelegate(driver, profile_dir)
+        return SeleniumBrowserDelegate(driver, profile_dir, download_dir)
