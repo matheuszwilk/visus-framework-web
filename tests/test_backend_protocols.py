@@ -30,6 +30,15 @@ class _FakePage:
     def is_closed(self):
         return False
 
+    def locator_count(self, selector):
+        return 0
+
+    def locator_is_visible(self, selector):
+        return False
+
+    def locator_text_content(self, selector):
+        return None
+
 
 class _FakeContext:
     def new_page(self):

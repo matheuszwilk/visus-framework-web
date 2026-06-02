@@ -14,6 +14,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 
 from visus.web import errors
 from visus.web.backends.base import PageDelegate
+from visus.web.backends.selenium.js import BUNDLE_JS
 
 
 def translate_exc(exc: Exception) -> errors.VisusWebError:
@@ -120,6 +121,53 @@ class SeleniumPageDelegate:
 
     def is_closed(self) -> bool:
         return self._closed
+
+    def _ensure_bundle(self) -> None:
+        present = self._driver.execute_script("return !!window.__visus;")
+        if not present:
+            self._driver.execute_script(BUNDLE_JS)
+
+    def _resolve_all(self, selector: str) -> list[object]:
+        self._activate()
+        self._ensure_bundle()
+        return cast(
+            list[object],
+            self._driver.execute_script(
+                "return window.__visus.queryAll(arguments[0]);", selector
+            ),
+        )
+
+    def _resolve_strict(self, selector: str) -> object | None:
+        els = self._resolve_all(selector)
+        if len(els) > 1:
+            raise errors.StrictModeViolation(
+                f"locator resolved to {len(els)} elements; use first()/last()/nth() to pick one"
+            )
+        return els[0] if els else None
+
+    def locator_count(self, selector: str) -> int:
+        return len(self._resolve_all(selector))
+
+    def locator_is_visible(self, selector: str) -> bool:
+        el = self._resolve_strict(selector)
+        if el is None:
+            return False
+        state = cast(
+            dict[str, object],
+            self._driver.execute_script(
+                "return window.__visus.elementState(arguments[0], 'visible');", el
+            ),
+        )
+        return cast(bool, state["matches"])
+
+    def locator_text_content(self, selector: str) -> str | None:
+        el = self._resolve_strict(selector)
+        if el is None:
+            return None
+        return cast(
+            "str | None",
+            self._driver.execute_script("return window.__visus.normText(arguments[0]);", el),
+        )
 
 
 class SeleniumContextDelegate:
