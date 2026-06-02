@@ -210,29 +210,61 @@ class SeleniumPageDelegate:
         )
 
     def locator_hover(self, selector: str, *, timeout_ms: int, force: bool) -> None:
-        self._activate(); self._ensure_bundle()
-        run_action(self._driver, selector, "hover", timeout_ms=timeout_ms, force=force,
-                   dispatch=lambda el: ActionChains(self._driver).move_to_element(el).perform())
+        self._activate()
+        self._ensure_bundle()
+        run_action(
+            self._driver,
+            selector,
+            "hover",
+            timeout_ms=timeout_ms,
+            force=force,
+            dispatch=lambda el: ActionChains(self._driver).move_to_element(el).perform(),
+        )
 
     def locator_dblclick(self, selector: str, *, timeout_ms: int, force: bool) -> None:
-        self._activate(); self._ensure_bundle()
-        run_action(self._driver, selector, "dblclick", timeout_ms=timeout_ms, force=force,
-                   dispatch=lambda el: ActionChains(self._driver).move_to_element(el).double_click().perform())
+        self._activate()
+        self._ensure_bundle()
+        run_action(
+            self._driver,
+            selector,
+            "dblclick",
+            timeout_ms=timeout_ms,
+            force=force,
+            dispatch=lambda el: (
+                ActionChains(self._driver).move_to_element(el).double_click().perform()
+            ),
+        )
 
-    def locator_set_checked(self, selector: str, checked: bool, *, timeout_ms: int, force: bool) -> None:
-        self._activate(); self._ensure_bundle()
+    def locator_set_checked(
+        self, selector: str, checked: bool, *, timeout_ms: int, force: bool
+    ) -> None:
+        self._activate()
+        self._ensure_bundle()
 
         def _do(el: WebElement) -> None:
-            cur = bool(self._driver.execute_script(
-                "return window.__visus.elementState(arguments[0],'checked').matches;", el))
+            cur = bool(
+                self._driver.execute_script(
+                    "return window.__visus.elementState(arguments[0],'checked').matches;", el
+                )
+            )
             if cur != checked:
                 ActionChains(self._driver).move_to_element(el).click().perform()
 
-        run_action(self._driver, selector, "check", timeout_ms=timeout_ms, force=force, dispatch=_do)
+        run_action(
+            self._driver, selector, "check", timeout_ms=timeout_ms, force=force, dispatch=_do
+        )
 
-    def locator_select_option(self, selector: str, *, value: str | None, label: str | None,
-                              index: int | None, timeout_ms: int) -> None:
-        self._activate(); self._ensure_bundle()
+    def locator_select_option(
+        self,
+        selector: str,
+        *,
+        value: str | None,
+        label: str | None,
+        index: int | None,
+        timeout_ms: int,
+    ) -> None:
+        self._activate()
+        self._ensure_bundle()
 
         def _do(el: WebElement) -> None:
             sel = Select(el)
@@ -243,10 +275,18 @@ class SeleniumPageDelegate:
             elif index is not None:
                 sel.select_by_index(index)
 
-        run_action(self._driver, selector, "select_option", timeout_ms=timeout_ms, force=False, dispatch=_do)
+        run_action(
+            self._driver,
+            selector,
+            "select_option",
+            timeout_ms=timeout_ms,
+            force=False,
+            dispatch=_do,
+        )
 
     def locator_press(self, selector: str, key: str, *, timeout_ms: int) -> None:
-        self._activate(); self._ensure_bundle()
+        self._activate()
+        self._ensure_bundle()
 
         def _do(el: WebElement) -> None:
             parts = key.split("+")
@@ -264,33 +304,60 @@ class SeleniumPageDelegate:
             else:
                 el.send_keys(main)
 
-        run_action(self._driver, selector, "press", timeout_ms=timeout_ms, force=False, dispatch=_do)
+        run_action(
+            self._driver, selector, "press", timeout_ms=timeout_ms, force=False, dispatch=_do
+        )
 
     def locator_focus(self, selector: str, *, timeout_ms: int) -> None:
-        self._activate(); self._ensure_bundle()
-        run_action(self._driver, selector, "focus", timeout_ms=timeout_ms, force=False,
-                   dispatch=lambda el: self._driver.execute_script("arguments[0].focus();", el))
+        self._activate()
+        self._ensure_bundle()
+        run_action(
+            self._driver,
+            selector,
+            "focus",
+            timeout_ms=timeout_ms,
+            force=False,
+            dispatch=lambda el: ActionChains(self._driver).move_to_element(el).click().perform(),
+        )
 
     def locator_blur(self, selector: str, *, timeout_ms: int) -> None:
-        self._activate(); self._ensure_bundle()
-        run_action(self._driver, selector, "blur", timeout_ms=timeout_ms, force=False,
-                   dispatch=lambda el: self._driver.execute_script("arguments[0].blur();", el))
+        self._activate()
+        self._ensure_bundle()
+        run_action(
+            self._driver,
+            selector,
+            "blur",
+            timeout_ms=timeout_ms,
+            force=False,
+            dispatch=lambda el: self._driver.execute_script("arguments[0].blur();", el),
+        )
 
     def locator_clear(self, selector: str, *, timeout_ms: int, force: bool) -> None:
-        self._activate(); self._ensure_bundle()
-        run_action(self._driver, selector, "clear", timeout_ms=timeout_ms, force=force,
-                   dispatch=lambda el: el.clear())
+        self._activate()
+        self._ensure_bundle()
+        run_action(
+            self._driver,
+            selector,
+            "clear",
+            timeout_ms=timeout_ms,
+            force=force,
+            dispatch=lambda el: el.clear(),
+        )
 
     def locator_drag_to(self, selector: str, target: str, *, timeout_ms: int) -> None:
-        self._activate(); self._ensure_bundle()
-        tgt = self._resolve_strict(target)
-        if tgt is None:
+        self._activate()
+        self._ensure_bundle()
+        tgt_raw = self._resolve_strict(target)
+        if tgt_raw is None:
             raise errors.ElementNotFoundError(f"drag target not found: {target}")
+        tgt = cast(WebElement, tgt_raw)
 
         def _do(src: WebElement) -> None:
             ActionChains(self._driver).click_and_hold(src).move_to_element(tgt).release().perform()
 
-        run_action(self._driver, selector, "drag", timeout_ms=timeout_ms, force=False, dispatch=_do)
+        run_action(
+            self._driver, selector, "drag", timeout_ms=timeout_ms, force=False, dispatch=_do
+        )
 
     def locator_input_value(self, selector: str) -> str:
         self._activate()

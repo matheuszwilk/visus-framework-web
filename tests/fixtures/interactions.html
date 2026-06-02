@@ -1,0 +1,38 @@
+<!doctype html>
+<html>
+  <head><title>interactions fixture</title></head>
+  <body>
+    <input type="checkbox" id="cb" onchange="cbstate.textContent=this.checked?'on':'off'" />
+    <span id="cbstate"></span>
+
+    <select id="sel">
+      <option value="x">X</option><option value="y">Y</option><option value="z">Z</option>
+    </select>
+
+    <input type="text" id="txt" value="hello"
+           onkeydown="if(event.key==='Enter')pressres.textContent='enter'" />
+    <div id="pressres"></div>
+
+    <div id="hovertarget" onmouseover="hoverres.textContent='hovered'">hover me</div>
+    <div id="hoverres"></div>
+
+    <button id="dbl" ondblclick="dblres.textContent='double'">dbl</button>
+    <div id="dblres"></div>
+
+    <div id="focusable" tabindex="0"
+         onfocus="focusres.textContent='focused'" onblur="blurres.textContent='blurred'">f</div>
+    <div id="focusres"></div><div id="blurres"></div>
+
+    <div id="src" style="width:60px;height:60px;background:#aaa">S</div>
+    <div id="dst" style="width:60px;height:60px;background:#ccc"
+         onmouseup="dragres.textContent='dropped'">D</div>
+    <div id="dragres"></div>
+
+    <script>
+      var cbstate=document.getElementById('cbstate'), pressres=document.getElementById('pressres'),
+          hoverres=document.getElementById('hoverres'), dblres=document.getElementById('dblres'),
+          focusres=document.getElementById('focusres'), blurres=document.getElementById('blurres'),
+          dragres=document.getElementById('dragres');
+    </script>
+  </body>
+</html>

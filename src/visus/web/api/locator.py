@@ -107,13 +107,21 @@ class Locator:
         self._delegate.locator_dblclick(self._encoded, timeout_ms=self._t(timeout), force=force)
 
     def check(self, *, timeout: int | None = None, force: bool = False) -> None:
-        self._delegate.locator_set_checked(self._encoded, True, timeout_ms=self._t(timeout), force=force)
+        self._delegate.locator_set_checked(
+            self._encoded, True, timeout_ms=self._t(timeout), force=force
+        )
 
     def uncheck(self, *, timeout: int | None = None, force: bool = False) -> None:
-        self._delegate.locator_set_checked(self._encoded, False, timeout_ms=self._t(timeout), force=force)
+        self._delegate.locator_set_checked(
+            self._encoded, False, timeout_ms=self._t(timeout), force=force
+        )
 
-    def set_checked(self, checked: bool, *, timeout: int | None = None, force: bool = False) -> None:
-        self._delegate.locator_set_checked(self._encoded, checked, timeout_ms=self._t(timeout), force=force)
+    def set_checked(
+        self, checked: bool, *, timeout: int | None = None, force: bool = False
+    ) -> None:
+        self._delegate.locator_set_checked(
+            self._encoded, checked, timeout_ms=self._t(timeout), force=force
+        )
 
     def select_option(self, *, value: str | None = None, label: str | None = None,
                       index: int | None = None, timeout: int | None = None) -> None:
@@ -132,7 +140,7 @@ class Locator:
     def clear(self, *, timeout: int | None = None, force: bool = False) -> None:
         self._delegate.locator_clear(self._encoded, timeout_ms=self._t(timeout), force=force)
 
-    def drag_to(self, target: "Locator", *, timeout: int | None = None) -> None:
+    def drag_to(self, target: Locator, *, timeout: int | None = None) -> None:
         self._delegate.locator_drag_to(self._encoded, target._encoded, timeout_ms=self._t(timeout))
 
     def input_value(self) -> str:
