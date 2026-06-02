@@ -146,19 +146,13 @@ class SeleniumPageDelegate:
 
     def _resolve_all(self, selector: str) -> list[object]:
         self._activate()
-        self._ensure_bundle()
-        return cast(
-            list[object],
-            self._driver.execute_script("return window.__visus.queryAll(arguments[0]);", selector),
-        )
+        from visus.web.backends.selenium.resolver import resolve_elements
+        return cast(list[object], resolve_elements(self._driver, self._ensure_bundle, selector))
 
     def _resolve_strict(self, selector: str) -> object | None:
-        els = self._resolve_all(selector)
-        if len(els) > 1:
-            raise errors.StrictModeViolation(
-                f"locator resolved to {len(els)} elements; use first()/last()/nth() to pick one"
-            )
-        return els[0] if els else None
+        self._activate()
+        from visus.web.backends.selenium.resolver import resolve_strict
+        return resolve_strict(self._driver, self._ensure_bundle, selector)
 
     def locator_count(self, selector: str) -> int:
         return len(self._resolve_all(selector))
@@ -194,6 +188,7 @@ class SeleniumPageDelegate:
             timeout_ms=timeout_ms,
             force=force,
             dispatch=lambda el: ActionChains(self._driver).move_to_element(el).click().perform(),
+            ensure_bundle=self._ensure_bundle,
         )
 
     def locator_fill(self, selector: str, value: str, *, timeout_ms: int, force: bool) -> None:
@@ -211,6 +206,7 @@ class SeleniumPageDelegate:
             timeout_ms=timeout_ms,
             force=force,
             dispatch=_do_fill,
+            ensure_bundle=self._ensure_bundle,
         )
 
     def locator_hover(self, selector: str, *, timeout_ms: int, force: bool) -> None:
@@ -223,6 +219,7 @@ class SeleniumPageDelegate:
             timeout_ms=timeout_ms,
             force=force,
             dispatch=lambda el: ActionChains(self._driver).move_to_element(el).perform(),
+            ensure_bundle=self._ensure_bundle,
         )
 
     def locator_dblclick(self, selector: str, *, timeout_ms: int, force: bool) -> None:
@@ -237,6 +234,7 @@ class SeleniumPageDelegate:
             dispatch=lambda el: (
                 ActionChains(self._driver).move_to_element(el).double_click().perform()
             ),
+            ensure_bundle=self._ensure_bundle,
         )
 
     def locator_set_checked(
@@ -255,7 +253,8 @@ class SeleniumPageDelegate:
                 ActionChains(self._driver).move_to_element(el).click().perform()
 
         run_action(
-            self._driver, selector, "check", timeout_ms=timeout_ms, force=force, dispatch=_do
+            self._driver, selector, "check", timeout_ms=timeout_ms, force=force, dispatch=_do,
+            ensure_bundle=self._ensure_bundle,
         )
 
     def locator_select_option(
@@ -286,6 +285,7 @@ class SeleniumPageDelegate:
             timeout_ms=timeout_ms,
             force=False,
             dispatch=_do,
+            ensure_bundle=self._ensure_bundle,
         )
 
     def locator_press(self, selector: str, key: str, *, timeout_ms: int) -> None:
@@ -309,7 +309,8 @@ class SeleniumPageDelegate:
                 el.send_keys(main)
 
         run_action(
-            self._driver, selector, "press", timeout_ms=timeout_ms, force=False, dispatch=_do
+            self._driver, selector, "press", timeout_ms=timeout_ms, force=False, dispatch=_do,
+            ensure_bundle=self._ensure_bundle,
         )
 
     def locator_focus(self, selector: str, *, timeout_ms: int) -> None:
@@ -322,6 +323,7 @@ class SeleniumPageDelegate:
             timeout_ms=timeout_ms,
             force=False,
             dispatch=lambda el: ActionChains(self._driver).move_to_element(el).click().perform(),
+            ensure_bundle=self._ensure_bundle,
         )
 
     def locator_blur(self, selector: str, *, timeout_ms: int) -> None:
@@ -334,6 +336,7 @@ class SeleniumPageDelegate:
             timeout_ms=timeout_ms,
             force=False,
             dispatch=lambda el: self._driver.execute_script("arguments[0].blur();", el),
+            ensure_bundle=self._ensure_bundle,
         )
 
     def locator_clear(self, selector: str, *, timeout_ms: int, force: bool) -> None:
@@ -346,6 +349,7 @@ class SeleniumPageDelegate:
             timeout_ms=timeout_ms,
             force=force,
             dispatch=lambda el: el.clear(),
+            ensure_bundle=self._ensure_bundle,
         )
 
     def locator_drag_to(self, selector: str, target: str, *, timeout_ms: int) -> None:
@@ -360,7 +364,8 @@ class SeleniumPageDelegate:
             ActionChains(self._driver).click_and_hold(src).move_to_element(tgt).release().perform()
 
         run_action(
-            self._driver, selector, "drag", timeout_ms=timeout_ms, force=False, dispatch=_do
+            self._driver, selector, "drag", timeout_ms=timeout_ms, force=False, dispatch=_do,
+            ensure_bundle=self._ensure_bundle,
         )
 
     def locator_input_value(self, selector: str) -> str:
@@ -407,8 +412,15 @@ class SeleniumPageDelegate:
         timeout_ms: int,
     ) -> None:
         self._activate()
-        self._ensure_bundle()
-        run_expect(self._driver, selector, matcher, arg, is_not=is_not, timeout_ms=timeout_ms)
+        run_expect(
+            self._driver,
+            selector,
+            matcher,
+            arg,
+            is_not=is_not,
+            timeout_ms=timeout_ms,
+            ensure_bundle=self._ensure_bundle,
+        )
 
     def evaluate(self, expression: str, arg: object) -> object:
         self._activate()

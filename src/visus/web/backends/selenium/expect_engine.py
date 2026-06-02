@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from time import monotonic, sleep
 from typing import cast
 
@@ -16,20 +17,19 @@ _SINGLE_STATES = {"visible", "hidden", "enabled", "disabled", "editable", "check
 
 
 def _norm_ws(s: str) -> str:
-    return re.sub(r"\s+", " ", s.replace(" ", " ")).strip()
-
-
-def _query(driver: WebDriver, selector: str) -> list[WebElement]:
-    return cast(
-        list[WebElement],
-        driver.execute_script("return window.__visus.queryAll(arguments[0]);", selector),
-    )
+    return re.sub(r"\s+", " ", s.replace("\xa0", " ")).strip()
 
 
 def _evaluate(
-    driver: WebDriver, selector: str, matcher: str, arg: dict[str, object] | None
+    driver: WebDriver,
+    ensure_bundle: Callable[[], None],
+    selector: str,
+    matcher: str,
+    arg: dict[str, object] | None,
 ) -> tuple[bool, object]:
-    els = _query(driver, selector)
+    from visus.web.backends.selenium.resolver import resolve_elements
+
+    els = resolve_elements(driver, ensure_bundle, selector)
     if matcher == "count":
         n = len(els)
         return (n == cast(dict[str, object], arg)["count"], n)
@@ -114,6 +114,7 @@ def run_expect(
     *,
     is_not: bool,
     timeout_ms: int,
+    ensure_bundle: Callable[[], None],
 ) -> None:
     deadline = monotonic() + timeout_ms / 1000
     retry = 0
@@ -124,7 +125,7 @@ def run_expect(
             if remaining <= 0:
                 break
             sleep(min(_BACKOFF[min(retry, len(_BACKOFF) - 1)], remaining))
-        matches, received = _evaluate(driver, selector, matcher, arg)
+        matches, received = _evaluate(driver, ensure_bundle, selector, matcher, arg)
         if matches != is_not:  # satisfied (handles negation for free)
             return
         retry += 1

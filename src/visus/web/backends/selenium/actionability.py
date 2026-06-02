@@ -28,16 +28,11 @@ _POINTER_ACTIONS = frozenset({"click", "dblclick", "check", "hover", "drag"})
 _BACKOFF: tuple[float, ...] = (0.0, 0.02, 0.1, 0.1, 0.5)
 
 
-def _query_strict(driver: WebDriver, selector: str) -> WebElement | None:
-    els = cast(
-        list[WebElement],
-        driver.execute_script("return window.__visus.queryAll(arguments[0]);", selector),
-    )
-    if len(els) > 1:
-        raise errors.StrictModeViolation(
-            f"locator resolved to {len(els)} elements; use first()/last()/nth()"
-        )
-    return els[0] if els else None
+def _query_strict(
+    driver: WebDriver, ensure_bundle: Callable[[], None], selector: str
+) -> WebElement | None:
+    from visus.web.backends.selenium.resolver import resolve_strict
+    return resolve_strict(driver, ensure_bundle, selector)
 
 
 def _blocking_reason(
@@ -94,6 +89,7 @@ def run_action(
     timeout_ms: int,
     force: bool,
     dispatch: Callable[[WebElement], None],
+    ensure_bundle: Callable[[], None],
 ) -> None:
     states = _ACTION_STATES[name]
     deadline = monotonic() + timeout_ms / 1000
@@ -105,7 +101,7 @@ def run_action(
             if remaining <= 0:
                 break
             sleep(min(_BACKOFF[min(retry, len(_BACKOFF) - 1)], remaining))
-        el = _query_strict(driver, selector)
+        el = _query_strict(driver, ensure_bundle, selector)
         if el is not None:
             reason = None if force else _blocking_reason(driver, el, states, name)
             if reason is None:
