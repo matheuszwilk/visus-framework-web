@@ -20,16 +20,19 @@ def _norm_ws(s: str) -> str:
 
 
 def _query(driver: WebDriver, selector: str) -> list[WebElement]:
-    return cast(list[WebElement], driver.execute_script(
-        "return window.__visus.queryAll(arguments[0]);", selector
-    ))
+    return cast(
+        list[WebElement],
+        driver.execute_script("return window.__visus.queryAll(arguments[0]);", selector),
+    )
 
 
-def _evaluate(driver: WebDriver, selector: str, matcher: str, arg: dict | None) -> tuple[bool, object]:
+def _evaluate(
+    driver: WebDriver, selector: str, matcher: str, arg: dict[str, object] | None
+) -> tuple[bool, object]:
     els = _query(driver, selector)
     if matcher == "count":
         n = len(els)
-        return (n == cast(dict, arg)["count"], n)
+        return (n == cast(dict[str, object], arg)["count"], n)
     if matcher in _SINGLE_STATES:
         if not els:
             # absent element: 'hidden' is satisfied, everything else is not
@@ -38,9 +41,12 @@ def _evaluate(driver: WebDriver, selector: str, matcher: str, arg: dict | None) 
             raise errors.StrictModeViolation(
                 f"assertion locator resolved to {len(els)} elements; use first()/last()/nth()"
             )
-        res = cast(dict, driver.execute_script(
-            "return window.__visus.elementState(arguments[0],arguments[1]);", els[0], matcher
-        ))
+        res = cast(
+            dict[str, object],
+            driver.execute_script(
+                "return window.__visus.elementState(arguments[0],arguments[1]);", els[0], matcher
+            ),
+        )
         return (bool(res["matches"]), res["received"])
     if matcher == "text":
         if not els:
@@ -49,11 +55,14 @@ def _evaluate(driver: WebDriver, selector: str, matcher: str, arg: dict | None) 
             raise errors.StrictModeViolation(
                 f"assertion locator resolved to {len(els)} elements; use first()/last()/nth()"
             )
-        actual = _norm_ws(cast(str, driver.execute_script(
-            "return window.__visus.normText(arguments[0]);", els[0]
-        )))
-        spec = cast(dict, arg)
-        want = _norm_ws(spec["value"])
+        actual = _norm_ws(
+            cast(
+                str,
+                driver.execute_script("return window.__visus.normText(arguments[0]);", els[0]),
+            )
+        )
+        spec = cast(dict[str, object], arg)
+        want = _norm_ws(cast(str, spec["value"]))
         if spec["exact"]:
             return (actual == want, actual)
         return (want.lower() in actual.lower(), actual)
@@ -64,7 +73,7 @@ def run_expect(
     driver: WebDriver,
     selector: str,
     matcher: str,
-    arg: dict | None,
+    arg: dict[str, object] | None,
     *,
     is_not: bool,
     timeout_ms: int,
@@ -87,5 +96,6 @@ def run_expect(
     prefix = "not " if is_not else ""
     detail = f" (expected {arg})" if arg else ""
     raise AssertionError(
-        f"expect: {prefix}{matcher}{detail} not satisfied within {timeout_ms}ms; last received: {received!r}"
+        f"expect: {prefix}{matcher}{detail} not satisfied within {timeout_ms}ms;"
+        f" last received: {received!r}"
     )

@@ -94,13 +94,23 @@ def test_expect_passes_matcher_and_negation_to_delegate():
     from visus.web.config import Defaults
 
     class RecExpect:
-        def __init__(self): self.calls = []
-        def locator_count(self, s): return 0
-        def locator_is_visible(self, s): return False
-        def locator_text_content(self, s): return None
+        def __init__(self):
+            self.calls = []
+
+        def locator_count(self, s):
+            return 0
+
+        def locator_is_visible(self, s):
+            return False
+
+        def locator_text_content(self, s):
+            return None
+
         def locator_click(self, s, *, timeout_ms, force): ...
         def locator_fill(self, s, v, *, timeout_ms, force): ...
-        def locator_input_value(self, s): return ""
+        def locator_input_value(self, s):
+            return ""
+
         def expect_poll(self, s, matcher, arg, *, is_not, timeout_ms):
             self.calls.append((matcher, arg, is_not, timeout_ms))
 

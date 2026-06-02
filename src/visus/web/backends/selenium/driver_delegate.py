@@ -209,7 +209,13 @@ class SeleniumPageDelegate:
         return cast(str, self._driver.execute_script("return arguments[0].value;", el))
 
     def expect_poll(
-        self, selector: str, matcher: str, arg: dict | None, *, is_not: bool, timeout_ms: int
+        self,
+        selector: str,
+        matcher: str,
+        arg: dict[str, object] | None,
+        *,
+        is_not: bool,
+        timeout_ms: int,
     ) -> None:
         self._activate()
         self._ensure_bundle()

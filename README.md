@@ -17,5 +17,5 @@ Modern, Playwright-style web automation on a **pure Selenium engine**, with BotC
 
 ## Status
 
-Slice S0 (foundation: backend seam + launch + navigation) complete.
-Next: S1 — lazy Locators, auto-wait/actionability, and auto-retrying `expect()`.
+Slice S1 complete (lazy Locators, auto-wait click/fill, web-first expect()).
+Next: S2 — more actions + assertions + mouse/keyboard.

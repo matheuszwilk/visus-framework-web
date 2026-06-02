@@ -7,15 +7,15 @@ if TYPE_CHECKING:
 
 
 class LocatorAssertions:
-    def __init__(self, locator: "Locator", *, is_not: bool = False) -> None:
+    def __init__(self, locator: Locator, *, is_not: bool = False) -> None:
         self._locator = locator
         self._is_not = is_not
 
     @property
-    def not_(self) -> "LocatorAssertions":
+    def not_(self) -> LocatorAssertions:
         return LocatorAssertions(self._locator, is_not=not self._is_not)
 
-    def _poll(self, matcher: str, arg: dict | None, timeout: int | None) -> None:
+    def _poll(self, matcher: str, arg: dict[str, object] | None, timeout: int | None) -> None:
         loc = self._locator
         loc._delegate.expect_poll(
             loc._encoded,
@@ -37,7 +37,9 @@ class LocatorAssertions:
     def to_be_checked(self, *, timeout: int | None = None) -> None:
         self._poll("checked", None, timeout)
 
-    def to_have_text(self, expected: str, *, exact: bool = True, timeout: int | None = None) -> None:
+    def to_have_text(
+        self, expected: str, *, exact: bool = True, timeout: int | None = None
+    ) -> None:
         self._poll("text", {"value": expected, "exact": exact}, timeout)
 
     def to_contain_text(self, expected: str, *, timeout: int | None = None) -> None:
@@ -47,6 +49,6 @@ class LocatorAssertions:
         self._poll("count", {"count": count}, timeout)
 
 
-def expect(locator: "Locator") -> LocatorAssertions:
+def expect(locator: Locator) -> LocatorAssertions:
     """Web-first assertion entry point: expect(locator).to_be_visible() etc."""
     return LocatorAssertions(locator)

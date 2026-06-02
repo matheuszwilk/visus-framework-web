@@ -25,7 +25,13 @@ class PageDelegate(Protocol):
     def locator_fill(self, selector: str, value: str, *, timeout_ms: int, force: bool) -> None: ...
     def locator_input_value(self, selector: str) -> str: ...
     def expect_poll(
-        self, selector: str, matcher: str, arg: dict | None, *, is_not: bool, timeout_ms: int
+        self,
+        selector: str,
+        matcher: str,
+        arg: dict[str, object] | None,
+        *,
+        is_not: bool,
+        timeout_ms: int,
     ) -> None: ...
 
 
