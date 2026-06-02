@@ -81,11 +81,14 @@ class Locator:
     def text_content(self) -> str | None:
         return self._delegate.locator_text_content(self._encoded)
 
+    def _t(self, timeout: int | None) -> int:
+        return timeout if timeout is not None else self._defaults.action_timeout_ms
+
     # --- actions (auto-wait via actionability loop in the delegate) ---
     def click(self, *, timeout: int | None = None, force: bool = False) -> None:
         self._delegate.locator_click(
             self._encoded,
-            timeout_ms=timeout if timeout is not None else self._defaults.action_timeout_ms,
+            timeout_ms=self._t(timeout),
             force=force,
         )
 
@@ -93,9 +96,44 @@ class Locator:
         self._delegate.locator_fill(
             self._encoded,
             value,
-            timeout_ms=timeout if timeout is not None else self._defaults.action_timeout_ms,
+            timeout_ms=self._t(timeout),
             force=force,
         )
+
+    def hover(self, *, timeout: int | None = None, force: bool = False) -> None:
+        self._delegate.locator_hover(self._encoded, timeout_ms=self._t(timeout), force=force)
+
+    def dblclick(self, *, timeout: int | None = None, force: bool = False) -> None:
+        self._delegate.locator_dblclick(self._encoded, timeout_ms=self._t(timeout), force=force)
+
+    def check(self, *, timeout: int | None = None, force: bool = False) -> None:
+        self._delegate.locator_set_checked(self._encoded, True, timeout_ms=self._t(timeout), force=force)
+
+    def uncheck(self, *, timeout: int | None = None, force: bool = False) -> None:
+        self._delegate.locator_set_checked(self._encoded, False, timeout_ms=self._t(timeout), force=force)
+
+    def set_checked(self, checked: bool, *, timeout: int | None = None, force: bool = False) -> None:
+        self._delegate.locator_set_checked(self._encoded, checked, timeout_ms=self._t(timeout), force=force)
+
+    def select_option(self, *, value: str | None = None, label: str | None = None,
+                      index: int | None = None, timeout: int | None = None) -> None:
+        self._delegate.locator_select_option(
+            self._encoded, value=value, label=label, index=index, timeout_ms=self._t(timeout))
+
+    def press(self, key: str, *, timeout: int | None = None) -> None:
+        self._delegate.locator_press(self._encoded, key, timeout_ms=self._t(timeout))
+
+    def focus(self, *, timeout: int | None = None) -> None:
+        self._delegate.locator_focus(self._encoded, timeout_ms=self._t(timeout))
+
+    def blur(self, *, timeout: int | None = None) -> None:
+        self._delegate.locator_blur(self._encoded, timeout_ms=self._t(timeout))
+
+    def clear(self, *, timeout: int | None = None, force: bool = False) -> None:
+        self._delegate.locator_clear(self._encoded, timeout_ms=self._t(timeout), force=force)
+
+    def drag_to(self, target: "Locator", *, timeout: int | None = None) -> None:
+        self._delegate.locator_drag_to(self._encoded, target._encoded, timeout_ms=self._t(timeout))
 
     def input_value(self) -> str:
         return self._delegate.locator_input_value(self._encoded)
