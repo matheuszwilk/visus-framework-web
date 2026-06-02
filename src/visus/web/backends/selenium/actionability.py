@@ -13,8 +13,18 @@ from visus.web import errors
 
 _ACTION_STATES: dict[str, tuple[str, ...]] = {
     "click": ("visible", "enabled", "stable"),
+    "dblclick": ("visible", "enabled", "stable"),
+    "check": ("visible", "enabled", "stable"),
+    "hover": ("visible", "stable"),
+    "drag": ("visible", "stable"),
     "fill": ("visible", "enabled", "editable"),
+    "clear": ("visible", "enabled", "editable"),
+    "select_option": ("visible", "enabled"),
+    "press": ("visible",),
+    "focus": (),
+    "blur": (),
 }
+_POINTER_ACTIONS = frozenset({"click", "dblclick", "check", "hover", "drag"})
 _BACKOFF: tuple[float, ...] = (0.0, 0.02, 0.1, 0.1, 0.5)
 
 
@@ -56,7 +66,7 @@ def _blocking_reason(
         )
         if not res["matches"]:
             return f"not {st} ({res['received']})"
-    if name == "click":
+    if name in _POINTER_ACTIONS:
         _SCROLL_JS = "arguments[0].scrollIntoView({block:'center',inline:'center'});"
         driver.execute_script(_SCROLL_JS, el)
         pt = cast(
