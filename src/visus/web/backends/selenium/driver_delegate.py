@@ -213,7 +213,7 @@ class SeleniumPageDelegate:
         if el is None:
             return state == "hidden"
         res = cast(
-            dict,
+            "dict[str, object]",
             self._driver.execute_script(
                 "return window.__visus.elementState(arguments[0],arguments[1]);", el, state
             ),
@@ -224,19 +224,15 @@ class SeleniumPageDelegate:
         self._activate()
         self._ensure_bundle()
         els = self._resolve_all(selector)
-        return [
-            cast(str, self._driver.execute_script("return window.__visus.normText(arguments[0]);", el))
-            for el in els
-        ]
+        _js = "return window.__visus.normText(arguments[0]);"
+        return [cast(str, self._driver.execute_script(_js, el)) for el in els]
 
     def locator_get_attribute(self, selector: str, name: str) -> str | None:
         el = self._resolve_strict(selector)
         if el is None:
             return None
-        return cast(
-            "str | None",
-            self._driver.execute_script("return arguments[0].getAttribute(arguments[1]);", el, name),
-        )
+        _js = "return arguments[0].getAttribute(arguments[1]);"
+        return cast("str | None", self._driver.execute_script(_js, el, name))
 
     def expect_poll(
         self,

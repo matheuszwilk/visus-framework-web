@@ -31,19 +31,19 @@ class Locator:
     def get_by_text(self, text: str, *, exact: bool = False) -> Locator:
         return self._child({"kind": "text", "value": text, "exact": exact})
 
-    def get_by_label(self, text: str, *, exact: bool = False) -> "Locator":
+    def get_by_label(self, text: str, *, exact: bool = False) -> Locator:
         return self._child({"kind": "label", "value": text, "exact": exact})
 
-    def get_by_placeholder(self, text: str, *, exact: bool = False) -> "Locator":
+    def get_by_placeholder(self, text: str, *, exact: bool = False) -> Locator:
         return self._child({"kind": "placeholder", "value": text, "exact": exact})
 
-    def get_by_alt_text(self, text: str, *, exact: bool = False) -> "Locator":
+    def get_by_alt_text(self, text: str, *, exact: bool = False) -> Locator:
         return self._child({"kind": "alt", "value": text, "exact": exact})
 
-    def get_by_title(self, text: str, *, exact: bool = False) -> "Locator":
+    def get_by_title(self, text: str, *, exact: bool = False) -> Locator:
         return self._child({"kind": "title", "value": text, "exact": exact})
 
-    def get_by_test_id(self, test_id: str) -> "Locator":
+    def get_by_test_id(self, test_id: str) -> Locator:
         return self._child({"kind": "testid", "value": test_id})
 
     def locator(self, selector: str) -> Locator:
@@ -100,7 +100,7 @@ class Locator:
     def input_value(self) -> str:
         return self._delegate.locator_input_value(self._encoded)
 
-    def all(self) -> list["Locator"]:
+    def all(self) -> list[Locator]:
         return [self.nth(i) for i in range(self.count())]
 
     def all_text_contents(self) -> list[str]:

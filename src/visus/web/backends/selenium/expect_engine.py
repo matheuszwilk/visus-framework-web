@@ -90,7 +90,8 @@ def _evaluate(
         if len(els) > 1:
             raise errors.StrictModeViolation("assertion locator matched multiple elements")
         spec = cast("dict[str, object]", arg)
-        cls = cast(str, driver.execute_script("return arguments[0].getAttribute('class') || '';", els[0]))
+        _cls_js = "return arguments[0].getAttribute('class') || '';"
+        cls = cast(str, driver.execute_script(_cls_js, els[0]))
         if spec["mode"] == "contains":
             return (cast(str, spec["value"]) in cls.split(), cls)
         return (_norm_ws(cls) == _norm_ws(cast(str, spec["value"])), cls)
