@@ -48,6 +48,16 @@ class SeleniumPageDelegate:
             raise errors.VisusTimeoutError(f"navigation to {url!r} timed out") from exc
         except WebDriverException as exc:
             raise errors.NavigationError(f"navigation to {url!r} failed: {exc}") from exc
+        # Chrome renders some network errors (e.g. ERR_UNSAFE_PORT) as a
+        # chrome-error:// page without raising a WebDriverException.  Detect
+        # this by asking the page for its *actual* document URL, which is the
+        # canonical chrome-error://chromewebdata/ for all such error pages.
+        try:
+            doc_url: str = self._driver.execute_script("return document.URL")
+        except WebDriverException:
+            doc_url = ""
+        if doc_url.startswith("chrome-error://"):
+            raise errors.NavigationError(f"navigation to {url!r} failed (browser error page)")
         if wait_until in ("load", "domcontentloaded"):
             state = "complete" if wait_until == "load" else "interactive"
             try:
