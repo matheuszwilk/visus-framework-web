@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from visus.web.backends.base import BrowserConfig
-from visus.web.backends.browsers import chrome
+from visus.web.backends.browsers import chrome, edge, edge_ie
 from visus.web.engine import Engine
 from visus.web.errors import UnsupportedEngineError
 
@@ -11,6 +11,18 @@ _CONFIGS: dict[Engine, BrowserConfig] = {
         options_factory=chrome.build_options,
         service_factory=chrome.build_service,
         driver_factory=chrome.build_driver,
+    ),
+    Engine.EDGE: BrowserConfig(
+        engine=Engine.EDGE,
+        options_factory=edge.build_options,
+        service_factory=edge.build_service,
+        driver_factory=edge.build_driver,
+    ),
+    Engine.EDGE_IE: BrowserConfig(
+        engine=Engine.EDGE_IE,
+        options_factory=edge_ie.build_options,
+        service_factory=edge_ie.build_service,
+        driver_factory=edge_ie.build_driver,
     ),
 }
 

@@ -9,11 +9,14 @@
     return normWs(el.textContent || "");
   }
 
-  var NAME_FROM_CONTENT = new Set([
-    "button", "link", "heading", "menuitem", "menuitemcheckbox", "menuitemradio",
-    "option", "tab", "treeitem", "cell", "columnheader", "rowheader", "gridcell",
-    "checkbox", "radio", "switch", "row", "tooltip", "listitem",
-  ]);
+  // Plain object used as a set for IE11 compatibility (Set array-constructor is broken in Trident).
+  var NAME_FROM_CONTENT = {
+    "button": true, "link": true, "heading": true, "menuitem": true,
+    "menuitemcheckbox": true, "menuitemradio": true, "option": true, "tab": true,
+    "treeitem": true, "cell": true, "columnheader": true, "rowheader": true,
+    "gridcell": true, "checkbox": true, "radio": true, "switch": true,
+    "row": true, "tooltip": true, "listitem": true,
+  };
 
   function implicitRole(el) {
     var tag = el.tagName.toLowerCase();
@@ -96,7 +99,7 @@
       var alt = el.getAttribute("alt");
       if (alt) return normWs(alt);
     }
-    if (NAME_FROM_CONTENT.has(computeRole(el))) {
+    if (NAME_FROM_CONTENT[computeRole(el)]) {
       var t = normText(el);
       if (t) return t;
     }
