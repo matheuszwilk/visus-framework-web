@@ -40,6 +40,10 @@ coverage.xml
 /.visus/
 downloads/
 *.trace.zip
+# WebDriver executables provided locally (e.g. the IE driver for Edge IE-mode) — never commit
+IEDriverServer.exe
+/*.exe
+/drivers/
 
 # ---- Editors / OS ----
 .idea/
