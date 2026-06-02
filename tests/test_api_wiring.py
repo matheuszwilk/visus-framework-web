@@ -1,7 +1,7 @@
 import pytest
 
 from visus.web.api.browser import Browser
-from visus.web.api.events import Dialog
+from visus.web.api.events import Dialog, Download
 from visus.web.api.page import Page
 from visus.web.config import Defaults
 from visus.web.errors import VisusWebError
@@ -68,6 +68,12 @@ class FakePage:
 
     def handle_next_dialog(self, *, accept, prompt_text, timeout_ms):
         return ("test msg", "dialog")
+
+    def snapshot_download_dir(self):
+        return []
+
+    def wait_for_download(self, before, *, timeout_ms):
+        return ("/tmp/file.txt", "file.txt")
 
 
 class FakeContext:
@@ -201,5 +207,25 @@ def test_expect_dialog_holder_raises_before_exit():
     browser = Browser(bd, Defaults())
     page = browser.new_page()
     with page.expect_dialog() as info:
+        with pytest.raises(VisusWebError, match="not available until the block completes"):
+            _ = info.value
+
+
+def test_expect_download_yields_download_object():
+    bd = FakeBrowserDelegate()
+    browser = Browser(bd, Defaults())
+    page = browser.new_page()
+    with page.expect_download() as info:
+        pass
+    assert isinstance(info.value, Download)
+    assert info.value.path == "/tmp/file.txt"
+    assert info.value.suggested_filename == "file.txt"
+
+
+def test_expect_download_holder_raises_before_exit():
+    bd = FakeBrowserDelegate()
+    browser = Browser(bd, Defaults())
+    page = browser.new_page()
+    with page.expect_download() as info:
         with pytest.raises(VisusWebError, match="not available until the block completes"):
             _ = info.value

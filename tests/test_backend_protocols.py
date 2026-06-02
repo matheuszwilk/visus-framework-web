@@ -92,6 +92,12 @@ class _FakePage:
     def pdf(self):
         return b""
 
+    def snapshot_download_dir(self):
+        return []
+
+    def wait_for_download(self, before, *, timeout_ms):
+        return ("/tmp/file.txt", "file.txt")
+
 
 class _FakeContext:
     def new_page(self):
