@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING
 
+from visus.web.api._steps import run_step
+
 if TYPE_CHECKING:
     from visus.web.api.frame_locator import FrameLocator
     from visus.web.backends.base import PageDelegate
@@ -91,42 +93,91 @@ class Locator:
         return timeout if timeout is not None else self._defaults.action_timeout_ms
 
     # --- actions (auto-wait via actionability loop in the delegate) ---
-    def click(self, *, timeout: int | None = None, force: bool = False) -> None:
-        self._delegate.locator_click(
-            self._encoded,
-            timeout_ms=self._t(timeout),
-            force=force,
+    def click(
+        self, *, timeout: int | None = None, force: bool = False, backtrack: bool | int = False
+    ) -> None:
+        run_step(
+            self._delegate,
+            lambda: self._delegate.locator_click(
+                self._encoded, timeout_ms=self._t(timeout), force=force
+            ),
+            backtrack,
         )
 
-    def fill(self, value: str, *, timeout: int | None = None, force: bool = False) -> None:
-        self._delegate.locator_fill(
-            self._encoded,
-            value,
-            timeout_ms=self._t(timeout),
-            force=force,
+    def fill(
+        self,
+        value: str,
+        *,
+        timeout: int | None = None,
+        force: bool = False,
+        backtrack: bool | int = False,
+    ) -> None:
+        run_step(
+            self._delegate,
+            lambda: self._delegate.locator_fill(
+                self._encoded, value, timeout_ms=self._t(timeout), force=force
+            ),
+            backtrack,
         )
 
-    def hover(self, *, timeout: int | None = None, force: bool = False) -> None:
-        self._delegate.locator_hover(self._encoded, timeout_ms=self._t(timeout), force=force)
-
-    def dblclick(self, *, timeout: int | None = None, force: bool = False) -> None:
-        self._delegate.locator_dblclick(self._encoded, timeout_ms=self._t(timeout), force=force)
-
-    def check(self, *, timeout: int | None = None, force: bool = False) -> None:
-        self._delegate.locator_set_checked(
-            self._encoded, True, timeout_ms=self._t(timeout), force=force
+    def hover(
+        self, *, timeout: int | None = None, force: bool = False, backtrack: bool | int = False
+    ) -> None:
+        run_step(
+            self._delegate,
+            lambda: self._delegate.locator_hover(
+                self._encoded, timeout_ms=self._t(timeout), force=force
+            ),
+            backtrack,
         )
 
-    def uncheck(self, *, timeout: int | None = None, force: bool = False) -> None:
-        self._delegate.locator_set_checked(
-            self._encoded, False, timeout_ms=self._t(timeout), force=force
+    def dblclick(
+        self, *, timeout: int | None = None, force: bool = False, backtrack: bool | int = False
+    ) -> None:
+        run_step(
+            self._delegate,
+            lambda: self._delegate.locator_dblclick(
+                self._encoded, timeout_ms=self._t(timeout), force=force
+            ),
+            backtrack,
+        )
+
+    def check(
+        self, *, timeout: int | None = None, force: bool = False, backtrack: bool | int = False
+    ) -> None:
+        run_step(
+            self._delegate,
+            lambda: self._delegate.locator_set_checked(
+                self._encoded, True, timeout_ms=self._t(timeout), force=force
+            ),
+            backtrack,
+        )
+
+    def uncheck(
+        self, *, timeout: int | None = None, force: bool = False, backtrack: bool | int = False
+    ) -> None:
+        run_step(
+            self._delegate,
+            lambda: self._delegate.locator_set_checked(
+                self._encoded, False, timeout_ms=self._t(timeout), force=force
+            ),
+            backtrack,
         )
 
     def set_checked(
-        self, checked: bool, *, timeout: int | None = None, force: bool = False
+        self,
+        checked: bool,
+        *,
+        timeout: int | None = None,
+        force: bool = False,
+        backtrack: bool | int = False,
     ) -> None:
-        self._delegate.locator_set_checked(
-            self._encoded, checked, timeout_ms=self._t(timeout), force=force
+        run_step(
+            self._delegate,
+            lambda: self._delegate.locator_set_checked(
+                self._encoded, checked, timeout_ms=self._t(timeout), force=force
+            ),
+            backtrack,
         )
 
     def select_option(
@@ -136,25 +187,58 @@ class Locator:
         label: str | None = None,
         index: int | None = None,
         timeout: int | None = None,
+        backtrack: bool | int = False,
     ) -> None:
-        self._delegate.locator_select_option(
-            self._encoded, value=value, label=label, index=index, timeout_ms=self._t(timeout)
+        run_step(
+            self._delegate,
+            lambda: self._delegate.locator_select_option(
+                self._encoded, value=value, label=label, index=index, timeout_ms=self._t(timeout)
+            ),
+            backtrack,
         )
 
-    def press(self, key: str, *, timeout: int | None = None) -> None:
-        self._delegate.locator_press(self._encoded, key, timeout_ms=self._t(timeout))
+    def press(self, key: str, *, timeout: int | None = None, backtrack: bool | int = False) -> None:
+        run_step(
+            self._delegate,
+            lambda: self._delegate.locator_press(self._encoded, key, timeout_ms=self._t(timeout)),
+            backtrack,
+        )
 
-    def focus(self, *, timeout: int | None = None) -> None:
-        self._delegate.locator_focus(self._encoded, timeout_ms=self._t(timeout))
+    def focus(self, *, timeout: int | None = None, backtrack: bool | int = False) -> None:
+        run_step(
+            self._delegate,
+            lambda: self._delegate.locator_focus(self._encoded, timeout_ms=self._t(timeout)),
+            backtrack,
+        )
 
-    def blur(self, *, timeout: int | None = None) -> None:
-        self._delegate.locator_blur(self._encoded, timeout_ms=self._t(timeout))
+    def blur(self, *, timeout: int | None = None, backtrack: bool | int = False) -> None:
+        run_step(
+            self._delegate,
+            lambda: self._delegate.locator_blur(self._encoded, timeout_ms=self._t(timeout)),
+            backtrack,
+        )
 
-    def clear(self, *, timeout: int | None = None, force: bool = False) -> None:
-        self._delegate.locator_clear(self._encoded, timeout_ms=self._t(timeout), force=force)
+    def clear(
+        self, *, timeout: int | None = None, force: bool = False, backtrack: bool | int = False
+    ) -> None:
+        run_step(
+            self._delegate,
+            lambda: self._delegate.locator_clear(
+                self._encoded, timeout_ms=self._t(timeout), force=force
+            ),
+            backtrack,
+        )
 
-    def drag_to(self, target: Locator, *, timeout: int | None = None) -> None:
-        self._delegate.locator_drag_to(self._encoded, target._encoded, timeout_ms=self._t(timeout))
+    def drag_to(
+        self, target: Locator, *, timeout: int | None = None, backtrack: bool | int = False
+    ) -> None:
+        run_step(
+            self._delegate,
+            lambda: self._delegate.locator_drag_to(
+                self._encoded, target._encoded, timeout_ms=self._t(timeout)
+            ),
+            backtrack,
+        )
 
     def input_value(self) -> str:
         return self._delegate.locator_input_value(self._encoded)
@@ -191,9 +275,15 @@ class Locator:
             Path(path).write_bytes(data)
         return data
 
-    def set_input_files(self, files: str | list[str]) -> None:
+    def set_input_files(
+        self, files: str | list[str], *, backtrack: bool | int = False
+    ) -> None:
         paths = [files] if isinstance(files, str) else list(files)
-        self._delegate.locator_set_input_files(self._encoded, paths)
+        run_step(
+            self._delegate,
+            lambda: self._delegate.locator_set_input_files(self._encoded, paths),
+            backtrack,
+        )
 
     # --- vision hooks (lazy-import; requires [vision] extra) ---
     def ocr_text(self) -> str:

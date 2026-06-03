@@ -5,6 +5,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from visus.web.api._steps import run_step
 from visus.web.api.events import Dialog, Download, _ValueHolder
 from visus.web.api.locator import Locator
 from visus.web.backends.base import PageDelegate
@@ -20,11 +21,22 @@ class Page:
         self._delegate = delegate
         self._defaults = defaults
 
-    def goto(self, url: str, *, wait_until: str = "load", timeout: int | None = None) -> None:
-        self._delegate.goto(
-            url,
-            wait_until=wait_until,
-            timeout_ms=timeout if timeout is not None else self._defaults.navigation_timeout_ms,
+    def goto(
+        self,
+        url: str,
+        *,
+        wait_until: str = "load",
+        timeout: int | None = None,
+        backtrack: bool | int = False,
+    ) -> None:
+        run_step(
+            self._delegate,
+            lambda: self._delegate.goto(
+                url,
+                wait_until=wait_until,
+                timeout_ms=timeout if timeout is not None else self._defaults.navigation_timeout_ms,
+            ),
+            backtrack,
         )
 
     @property
