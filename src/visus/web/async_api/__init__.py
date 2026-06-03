@@ -153,8 +153,17 @@ class AsyncPage:
 
     # --- navigation / async reads ---
 
-    async def goto(self, url: str, *, wait_until: str = "load", timeout: int | None = None) -> None:
-        await asyncio.to_thread(lambda: self._p.goto(url, wait_until=wait_until, timeout=timeout))
+    async def goto(
+        self,
+        url: str,
+        *,
+        wait_until: str = "load",
+        timeout: int | None = None,
+        backtrack: bool | int = False,
+    ) -> None:
+        await asyncio.to_thread(
+            lambda: self._p.goto(url, wait_until=wait_until, timeout=timeout, backtrack=backtrack)
+        )
 
     async def title(self) -> str:
         return await asyncio.to_thread(self._p.title)
@@ -379,32 +388,71 @@ class AsyncLocator:
 
     # --- async actions ---
 
-    async def click(self, *, timeout: int | None = None, force: bool = False) -> None:
-        await asyncio.to_thread(lambda: self._loc.click(timeout=timeout, force=force))
-
-    async def dblclick(self, *, timeout: int | None = None, force: bool = False) -> None:
-        await asyncio.to_thread(lambda: self._loc.dblclick(timeout=timeout, force=force))
-
-    async def fill(self, v: str, *, timeout: int | None = None, force: bool = False) -> None:
-        await asyncio.to_thread(lambda: self._loc.fill(v, timeout=timeout, force=force))
-
-    async def press(self, key: str, *, timeout: int | None = None) -> None:
-        await asyncio.to_thread(lambda: self._loc.press(key, timeout=timeout))
-
-    async def hover(self, *, timeout: int | None = None, force: bool = False) -> None:
-        await asyncio.to_thread(lambda: self._loc.hover(timeout=timeout, force=force))
-
-    async def check(self, *, timeout: int | None = None, force: bool = False) -> None:
-        await asyncio.to_thread(lambda: self._loc.check(timeout=timeout, force=force))
-
-    async def uncheck(self, *, timeout: int | None = None, force: bool = False) -> None:
-        await asyncio.to_thread(lambda: self._loc.uncheck(timeout=timeout, force=force))
-
-    async def set_checked(
-        self, checked: bool, *, timeout: int | None = None, force: bool = False
+    async def click(
+        self, *, timeout: int | None = None, force: bool = False, backtrack: bool | int = False
     ) -> None:
         await asyncio.to_thread(
-            lambda: self._loc.set_checked(checked, timeout=timeout, force=force)
+            lambda: self._loc.click(timeout=timeout, force=force, backtrack=backtrack)
+        )
+
+    async def dblclick(
+        self, *, timeout: int | None = None, force: bool = False, backtrack: bool | int = False
+    ) -> None:
+        await asyncio.to_thread(
+            lambda: self._loc.dblclick(timeout=timeout, force=force, backtrack=backtrack)
+        )
+
+    async def fill(
+        self,
+        v: str,
+        *,
+        timeout: int | None = None,
+        force: bool = False,
+        backtrack: bool | int = False,
+    ) -> None:
+        await asyncio.to_thread(
+            lambda: self._loc.fill(v, timeout=timeout, force=force, backtrack=backtrack)
+        )
+
+    async def press(
+        self, key: str, *, timeout: int | None = None, backtrack: bool | int = False
+    ) -> None:
+        await asyncio.to_thread(
+            lambda: self._loc.press(key, timeout=timeout, backtrack=backtrack)
+        )
+
+    async def hover(
+        self, *, timeout: int | None = None, force: bool = False, backtrack: bool | int = False
+    ) -> None:
+        await asyncio.to_thread(
+            lambda: self._loc.hover(timeout=timeout, force=force, backtrack=backtrack)
+        )
+
+    async def check(
+        self, *, timeout: int | None = None, force: bool = False, backtrack: bool | int = False
+    ) -> None:
+        await asyncio.to_thread(
+            lambda: self._loc.check(timeout=timeout, force=force, backtrack=backtrack)
+        )
+
+    async def uncheck(
+        self, *, timeout: int | None = None, force: bool = False, backtrack: bool | int = False
+    ) -> None:
+        await asyncio.to_thread(
+            lambda: self._loc.uncheck(timeout=timeout, force=force, backtrack=backtrack)
+        )
+
+    async def set_checked(
+        self,
+        checked: bool,
+        *,
+        timeout: int | None = None,
+        force: bool = False,
+        backtrack: bool | int = False,
+    ) -> None:
+        bt = backtrack
+        await asyncio.to_thread(
+            lambda: self._loc.set_checked(checked, timeout=timeout, force=force, backtrack=bt)
         )
 
     async def select_option(
@@ -414,25 +462,46 @@ class AsyncLocator:
         label: str | None = None,
         index: int | None = None,
         timeout: int | None = None,
+        backtrack: bool | int = False,
     ) -> None:
         await asyncio.to_thread(
-            lambda: self._loc.select_option(value=value, label=label, index=index, timeout=timeout)
+            lambda: self._loc.select_option(
+                value=value, label=label, index=index, timeout=timeout, backtrack=backtrack
+            )
         )
 
-    async def drag_to(self, target: AsyncLocator, *, timeout: int | None = None) -> None:
-        await asyncio.to_thread(lambda: self._loc.drag_to(target._loc, timeout=timeout))
+    async def drag_to(
+        self, target: AsyncLocator, *, timeout: int | None = None, backtrack: bool | int = False
+    ) -> None:
+        await asyncio.to_thread(
+            lambda: self._loc.drag_to(target._loc, timeout=timeout, backtrack=backtrack)
+        )
 
-    async def focus(self, *, timeout: int | None = None) -> None:
-        await asyncio.to_thread(lambda: self._loc.focus(timeout=timeout))
+    async def focus(
+        self, *, timeout: int | None = None, backtrack: bool | int = False
+    ) -> None:
+        await asyncio.to_thread(
+            lambda: self._loc.focus(timeout=timeout, backtrack=backtrack)
+        )
 
-    async def blur(self, *, timeout: int | None = None) -> None:
-        await asyncio.to_thread(lambda: self._loc.blur(timeout=timeout))
+    async def blur(
+        self, *, timeout: int | None = None, backtrack: bool | int = False
+    ) -> None:
+        await asyncio.to_thread(lambda: self._loc.blur(timeout=timeout, backtrack=backtrack))
 
-    async def clear(self, *, timeout: int | None = None, force: bool = False) -> None:
-        await asyncio.to_thread(lambda: self._loc.clear(timeout=timeout, force=force))
+    async def clear(
+        self, *, timeout: int | None = None, force: bool = False, backtrack: bool | int = False
+    ) -> None:
+        await asyncio.to_thread(
+            lambda: self._loc.clear(timeout=timeout, force=force, backtrack=backtrack)
+        )
 
-    async def set_input_files(self, files: str | list[str]) -> None:
-        await asyncio.to_thread(lambda: self._loc.set_input_files(files))
+    async def set_input_files(
+        self, files: str | list[str], *, backtrack: bool | int = False
+    ) -> None:
+        await asyncio.to_thread(
+            lambda: self._loc.set_input_files(files, backtrack=backtrack)
+        )
 
 
 # ---------------------------------------------------------------------------

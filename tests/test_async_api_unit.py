@@ -168,7 +168,9 @@ async def test_async_page_goto() -> None:
     p = _make_page()
     ap = AsyncPage(p)
     await ap.goto("http://x.com", wait_until="networkidle", timeout=5000)
-    p.goto.assert_called_once_with("http://x.com", wait_until="networkidle", timeout=5000)
+    p.goto.assert_called_once_with(
+        "http://x.com", wait_until="networkidle", timeout=5000, backtrack=False
+    )
 
 
 async def test_async_page_title() -> None:
@@ -534,63 +536,65 @@ async def test_async_locator_click() -> None:
     loc = _make_loc()
     al = AsyncLocator(loc)
     await al.click(timeout=3000, force=True)
-    loc.click.assert_called_once_with(timeout=3000, force=True)
+    loc.click.assert_called_once_with(timeout=3000, force=True, backtrack=False)
 
 
 async def test_async_locator_dblclick() -> None:
     loc = _make_loc()
     al = AsyncLocator(loc)
     await al.dblclick(timeout=2000)
-    loc.dblclick.assert_called_once_with(timeout=2000, force=False)
+    loc.dblclick.assert_called_once_with(timeout=2000, force=False, backtrack=False)
 
 
 async def test_async_locator_fill() -> None:
     loc = _make_loc()
     al = AsyncLocator(loc)
     await al.fill("hello", timeout=5000)
-    loc.fill.assert_called_once_with("hello", timeout=5000, force=False)
+    loc.fill.assert_called_once_with("hello", timeout=5000, force=False, backtrack=False)
 
 
 async def test_async_locator_press() -> None:
     loc = _make_loc()
     al = AsyncLocator(loc)
     await al.press("Enter")
-    loc.press.assert_called_once_with("Enter", timeout=None)
+    loc.press.assert_called_once_with("Enter", timeout=None, backtrack=False)
 
 
 async def test_async_locator_hover() -> None:
     loc = _make_loc()
     al = AsyncLocator(loc)
     await al.hover()
-    loc.hover.assert_called_once_with(timeout=None, force=False)
+    loc.hover.assert_called_once_with(timeout=None, force=False, backtrack=False)
 
 
 async def test_async_locator_check() -> None:
     loc = _make_loc()
     al = AsyncLocator(loc)
     await al.check()
-    loc.check.assert_called_once_with(timeout=None, force=False)
+    loc.check.assert_called_once_with(timeout=None, force=False, backtrack=False)
 
 
 async def test_async_locator_uncheck() -> None:
     loc = _make_loc()
     al = AsyncLocator(loc)
     await al.uncheck()
-    loc.uncheck.assert_called_once_with(timeout=None, force=False)
+    loc.uncheck.assert_called_once_with(timeout=None, force=False, backtrack=False)
 
 
 async def test_async_locator_set_checked() -> None:
     loc = _make_loc()
     al = AsyncLocator(loc)
     await al.set_checked(True)
-    loc.set_checked.assert_called_once_with(True, timeout=None, force=False)
+    loc.set_checked.assert_called_once_with(True, timeout=None, force=False, backtrack=False)
 
 
 async def test_async_locator_select_option() -> None:
     loc = _make_loc()
     al = AsyncLocator(loc)
     await al.select_option(value="red", timeout=2000)
-    loc.select_option.assert_called_once_with(value="red", label=None, index=None, timeout=2000)
+    loc.select_option.assert_called_once_with(
+        value="red", label=None, index=None, timeout=2000, backtrack=False
+    )
 
 
 async def test_async_locator_drag_to() -> None:
@@ -599,35 +603,35 @@ async def test_async_locator_drag_to() -> None:
     src = AsyncLocator(src_loc)
     tgt = AsyncLocator(tgt_loc)
     await src.drag_to(tgt, timeout=1000)
-    src_loc.drag_to.assert_called_once_with(tgt_loc, timeout=1000)
+    src_loc.drag_to.assert_called_once_with(tgt_loc, timeout=1000, backtrack=False)
 
 
 async def test_async_locator_focus() -> None:
     loc = _make_loc()
     al = AsyncLocator(loc)
     await al.focus()
-    loc.focus.assert_called_once_with(timeout=None)
+    loc.focus.assert_called_once_with(timeout=None, backtrack=False)
 
 
 async def test_async_locator_blur() -> None:
     loc = _make_loc()
     al = AsyncLocator(loc)
     await al.blur()
-    loc.blur.assert_called_once_with(timeout=None)
+    loc.blur.assert_called_once_with(timeout=None, backtrack=False)
 
 
 async def test_async_locator_clear() -> None:
     loc = _make_loc()
     al = AsyncLocator(loc)
     await al.clear(timeout=500)
-    loc.clear.assert_called_once_with(timeout=500, force=False)
+    loc.clear.assert_called_once_with(timeout=500, force=False, backtrack=False)
 
 
 async def test_async_locator_set_input_files() -> None:
     loc = _make_loc()
     al = AsyncLocator(loc)
     await al.set_input_files("/tmp/file.txt")
-    loc.set_input_files.assert_called_once_with("/tmp/file.txt")
+    loc.set_input_files.assert_called_once_with("/tmp/file.txt", backtrack=False)
 
 
 # ---------------------------------------------------------------------------
