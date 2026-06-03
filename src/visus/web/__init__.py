@@ -11,11 +11,13 @@ from visus.web.backends.selenium_backend import SeleniumBackend
 from visus.web.config import Defaults
 from visus.web.engine import Engine
 from visus.web.registry import get_browser_config
+from visus.web.rpa import rpa
 
 __version__ = "0.0.1"
 
 __all__ = [
     "launch",
+    "rpa",
     "expect",
     "Engine",
     "Browser",

@@ -154,6 +154,16 @@ class Recorder:
         self._events.append(event)
         events_logger.info(json.dumps(event))
 
+    def summary(self) -> dict[str, Any]:
+        """Lightweight in-memory run summary (no zip parsing needed)."""
+        ev = self._events
+        return {
+            "total": len(ev),
+            "failures": sum(1 for e in ev if not e.get("success")),
+            "backtrack_steps": sum(int(e.get("backtrack_steps") or 0) for e in ev),
+            "steps": [(str(e.get("action")), bool(e.get("success"))) for e in ev],
+        }
+
     def _save(self, delegate: Any, selector: str | None, name: str) -> str | None:
         try:
             self._shots[name] = delegate.capture_annotated_screenshot(selector)

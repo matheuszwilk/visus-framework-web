@@ -26,7 +26,7 @@ LOGIN_URL = "https://practicetestautomation.com/practice-test-login/"
 USERNAME = "student"
 PASSWORD = "Password123"
 
-ENGINE = "chrome"  # which browser: "chrome" | "edge" | "firefox" | "edge_ie"
+ENGINE = "edge"  # which browser: "chrome" | "edge" | "firefox" | "edge_ie"
 HEADLESS = False  # watch the browser drive; set True for CI/headless runs
 DEMO_FAILURE = True  # end on a deliberately broken step to prove the report is still
 #                      generated — and to show the friendly "did you mean?" error.
@@ -69,7 +69,7 @@ def main() -> None:
                 # 6) caso negativo: senha inválida -> mensagem de erro (expect em texto exato)
                 page.locator("css=#username").fill(USERNAME)
                 page.locator("css=#password").fill("SenhaErrada")
-                page.get_by_role("button", name="Submits").click(backtrack=2, timeout=5000)
+                page.get_by_role("button", name="Submit").click(backtrack=2, timeout=100)
                 expect(page.locator("#error")).to_have_text("Your password is invalid!")
 
                 # 7) falha proposital NÃO tratada: o botão "Submits" não existe. backtrack=2
