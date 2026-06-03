@@ -486,14 +486,9 @@ class SeleniumPageDelegate:
         self._activate()
         if not full_page:
             return self._driver.get_screenshot_as_png()
-        metrics = cast(
-            dict[str, object],
-            self._driver.execute_cdp_cmd("Page.getLayoutMetrics", {}),
-        )
-        size = cast(dict[str, object], metrics["cssContentSize"])
-        shot = cast(
-            dict[str, object],
-            self._driver.execute_cdp_cmd(
+        try:  # Chromium (Chrome/Edge)
+            size = self._driver.execute_cdp_cmd("Page.getLayoutMetrics", {})["cssContentSize"]
+            shot = self._driver.execute_cdp_cmd(
                 "Page.captureScreenshot",
                 {
                     "captureBeyondViewport": True,
@@ -506,9 +501,17 @@ class SeleniumPageDelegate:
                         "scale": 1,
                     },
                 },
-            ),
-        )
-        return base64.b64decode(cast(str, shot["data"]))
+            )
+            return base64.b64decode(cast(str, shot["data"]))
+        except (AttributeError, WebDriverException, KeyError):
+            pass
+        get_full = getattr(self._driver, "get_full_page_screenshot_as_png", None)  # Firefox native
+        if callable(get_full):
+            try:
+                return get_full()  # type: ignore[no-any-return]
+            except WebDriverException:
+                pass
+        return self._driver.get_screenshot_as_png()
 
     def locator_screenshot(self, selector: str) -> bytes:
         self._activate()
@@ -573,13 +576,19 @@ class SeleniumPageDelegate:
         return cast(list[dict], self._driver.execute_script("return window.__visus.snapshot();"))  # type: ignore[type-arg]
 
     def pdf(self) -> bytes:
-        """Print the current page to PDF via CDP printToPDF."""
+        """Print the current page to PDF via W3C print_page (all browsers) with CDP fallback."""
         self._activate()
-        res = cast(
-            dict[str, object],
-            self._driver.execute_cdp_cmd("Page.printToPDF", {"printBackground": True}),
-        )
-        return base64.b64decode(cast(str, res["data"]))
+        from selenium.webdriver.common.print_page_options import PrintOptions
+
+        try:
+            raw = self._driver.print_page(PrintOptions())
+            return base64.b64decode(raw)
+        except WebDriverException:
+            res = cast(
+                dict[str, object],
+                self._driver.execute_cdp_cmd("Page.printToPDF", {"printBackground": True}),
+            )
+            return base64.b64decode(cast(str, res["data"]))
 
     def snapshot_download_dir(self) -> list[str]:
         """Return the current list of files in the download directory."""
