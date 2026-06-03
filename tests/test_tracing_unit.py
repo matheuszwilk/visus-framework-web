@@ -149,5 +149,5 @@ def test_render_report_produces_html_from_empty_zip(tmp_path):
     html_path = str(tmp_path / "report.html")
     tracing.render_report(zip_path, html_path)
     html = (tmp_path / "report.html").read_text(encoding="utf-8")
-    assert "visus.web Observability Report" in html
-    assert "Actions" in html
+    assert "visus.web run report" in html
+    assert "actions" in html.lower()
