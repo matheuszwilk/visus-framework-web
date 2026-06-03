@@ -52,6 +52,8 @@ class Locator:
     def locator(self, selector: str) -> Locator:
         if selector.startswith("xpath="):
             return self._child({"kind": "xpath", "value": selector[len("xpath=") :]})
+        if selector.startswith("css="):
+            return self._child({"kind": "css", "value": selector[len("css=") :]})
         if selector.startswith("//") or selector.startswith("("):
             return self._child({"kind": "xpath", "value": selector})
         return self._child({"kind": "css", "value": selector})

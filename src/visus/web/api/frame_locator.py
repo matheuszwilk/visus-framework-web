@@ -13,7 +13,8 @@ def _frame_step(selector: str) -> dict[str, object]:
     if selector.startswith("xpath=") or selector.startswith("//") or selector.startswith("("):
         inner = selector[len("xpath=") :] if selector.startswith("xpath=") else selector
         return {"kind": "frame", "frame": [{"kind": "xpath", "value": inner}]}
-    return {"kind": "frame", "frame": [{"kind": "css", "value": selector}]}
+    css = selector[len("css=") :] if selector.startswith("css=") else selector
+    return {"kind": "frame", "frame": [{"kind": "css", "value": css}]}
 
 
 class FrameLocator:

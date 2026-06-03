@@ -9,6 +9,25 @@ def page(browser, base_url):
 
 
 @pytest.mark.browser
+def test_css_and_xpath_prefixes(page):
+    # the css= / xpath= prefixes (and bare //) all resolve correctly
+    assert page.locator("css=#user").count() == 1
+    assert page.locator("css=#user").get_attribute("value") == "ada"
+    assert page.locator("css=.field").count() == 1
+    assert page.locator("xpath=//input[@id='user']").count() == 1
+    assert page.locator("//input[@id='user']").count() == 1
+
+
+@pytest.mark.browser
+def test_malformed_selector_raises_visus_error(page):
+    # a bad selector must surface as a VisusWebError, never a raw selenium exception
+    from visus.web import errors
+
+    with pytest.raises(errors.VisusWebError):
+        page.locator("css=[[[bad").count()
+
+
+@pytest.mark.browser
 def test_get_by_label(page):
     assert page.get_by_label("Username").count() == 1
     assert page.get_by_label("Email address").count() == 1  # via aria-label

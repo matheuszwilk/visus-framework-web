@@ -6,6 +6,7 @@ import json
 from collections.abc import Callable
 from typing import cast
 
+from selenium.common.exceptions import WebDriverException
 from selenium.webdriver.remote.webdriver import WebDriver
 from selenium.webdriver.remote.webelement import WebElement
 
@@ -15,7 +16,11 @@ _QUERY = "return window.__visus.queryAll(arguments[0]);"
 
 
 def _query(driver: WebDriver, steps: list[dict[str, object]]) -> list[WebElement]:
-    return cast(list[WebElement], driver.execute_script(_QUERY, json.dumps(steps)))
+    try:
+        return cast(list[WebElement], driver.execute_script(_QUERY, json.dumps(steps)))
+    except WebDriverException as exc:
+        # a malformed selector (or any resolution failure) must not leak a raw selenium type
+        raise errors.VisusWebError(f"selector resolution failed: {exc.msg or exc}") from exc
 
 
 def resolve_elements(

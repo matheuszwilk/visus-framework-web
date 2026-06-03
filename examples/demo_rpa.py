@@ -56,12 +56,19 @@ INNER_HTML = """<!doctype html>
 """
 
 
+class _QuietHandler(http.server.SimpleHTTPRequestHandler):
+    """Local fixture server that stays silent — no access logs (incl. the harmless /favicon.ico 404)."""
+
+    def log_message(self, *args: object) -> None:
+        pass
+
+
 def main() -> None:
     work = Path(tempfile.mkdtemp(prefix="visus-demo-"))
     (work / "demo.html").write_text(DEMO_HTML, encoding="utf-8")
     (work / "inner.html").write_text(INNER_HTML, encoding="utf-8")
 
-    handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=str(work))
+    handler = functools.partial(_QuietHandler, directory=str(work))
     httpd = socketserver.ThreadingTCPServer(("127.0.0.1", 0), handler)
     httpd.daemon_threads = True
     base = f"http://127.0.0.1:{httpd.server_address[1]}"
@@ -76,9 +83,9 @@ def main() -> None:
             page.goto(f"{base}/demo.html")
             expect(page.get_by_role("heading", name="Cadastro Visus")).to_be_visible()
 
-            page.get_by_label("Nome").fill("Ada Lovelace")
-            page.get_by_label("Email").fill("ada@visus.dev")
-            page.get_by_role("checkbox", name="Aceito os termos").check()
+            page.get_by_label("Nome").fill("Ada Lovelace")          # locator semantico (label)
+            page.locator("css=#email").fill("ada@visus.dev")        # locator por CSS
+            page.locator("//input[@id='termos']").check()           # locator por XPath
             page.get_by_label("Plano").select_option(label="Free")
 
             page.get_by_role("button", name="Carregar dados").click()
@@ -97,7 +104,7 @@ def main() -> None:
             except errors.VisusWebError:
                 pass
 
-            page.get_by_role("button", name="Enviar").click()
+            page.locator("//button[@id='enviar']").click()         # locator por XPath
 
     # ---- render the HTML report ----
     report_html = work / "report.html"

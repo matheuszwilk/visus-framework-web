@@ -37,6 +37,18 @@ def _steps(loc):
     return json.loads(loc._encoded)
 
 
+def test_locator_css_and_xpath_prefixes():
+    d = _RecordingDelegate()
+
+    def mk(sel):
+        return _steps(Locator(d, (), _DEFAULTS).locator(sel))
+
+    assert mk("css=.item") == [{"kind": "css", "value": ".item"}]
+    assert mk(".item") == [{"kind": "css", "value": ".item"}]
+    assert mk("xpath=//a") == [{"kind": "xpath", "value": "//a"}]
+    assert mk("//a") == [{"kind": "xpath", "value": "//a"}]
+
+
 def test_get_by_role_appends_step_immutably():
     d = _RecordingDelegate()
     root = Locator(d, (), _DEFAULTS)
