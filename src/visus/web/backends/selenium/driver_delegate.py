@@ -77,6 +77,8 @@ class SeleniumPageDelegate:
         self._handle = handle
         self._closed = False
         self._download_dir = download_dir
+        self._mouse_x: int = 0
+        self._mouse_y: int = 0
 
     def _activate(self) -> None:
         if self._closed:
@@ -610,33 +612,40 @@ class SeleniumPageDelegate:
 
     def mouse_move(self, x: float, y: float) -> None:
         self._activate()
+        self._mouse_x, self._mouse_y = int(x), int(y)
         ab = ActionBuilder(self._driver)
-        ab.pointer_action.move_to_location(int(x), int(y))
+        ab.pointer_action.move_to_location(self._mouse_x, self._mouse_y)  # type: ignore[no-untyped-call]
         ab.perform()
 
     def mouse_down(self) -> None:
         self._activate()
         ab = ActionBuilder(self._driver)
-        ab.pointer_action.pointer_down()
+        ab.pointer_action.pointer_down()  # type: ignore[no-untyped-call]
         ab.perform()
 
     def mouse_up(self) -> None:
         self._activate()
         ab = ActionBuilder(self._driver)
-        ab.pointer_action.pointer_up()
+        ab.pointer_action.pointer_up()  # type: ignore[no-untyped-call]
         ab.perform()
 
     def mouse_click(self, x: float, y: float) -> None:
         self._activate()
+        self._mouse_x, self._mouse_y = int(x), int(y)
         ab = ActionBuilder(self._driver)
-        ab.pointer_action.move_to_location(int(x), int(y)).pointer_down().pointer_up()
+        ab.pointer_action.move_to_location(  # type: ignore[no-untyped-call]
+            self._mouse_x, self._mouse_y
+        ).pointer_down().pointer_up()
         ab.perform()
 
     def mouse_dblclick(self, x: float, y: float) -> None:
         self._activate()
+        self._mouse_x, self._mouse_y = int(x), int(y)
         ab = ActionBuilder(self._driver)
         (
-            ab.pointer_action.move_to_location(int(x), int(y))
+            ab.pointer_action.move_to_location(  # type: ignore[no-untyped-call]
+                self._mouse_x, self._mouse_y
+            )
             .pointer_down()
             .pointer_up()
             .pointer_down()
@@ -646,16 +655,24 @@ class SeleniumPageDelegate:
 
     def mouse_wheel(self, delta_x: float, delta_y: float) -> None:
         self._activate()
-        ActionChains(self._driver).scroll_by_amount(int(delta_x), int(delta_y)).perform()
+        ab = ActionBuilder(self._driver)
+        ab.wheel_action.scroll(  # type: ignore[no-untyped-call]
+            x=self._mouse_x,
+            y=self._mouse_y,
+            delta_x=int(delta_x),
+            delta_y=int(delta_y),
+        )
+        ab.perform()
 
     def keyboard_down(self, key: str) -> None:
         self._activate()
-        _mods, mapped = _parse_key(key)
+        # Modifiers like "Shift" live in _MODMAP; single chars and other keys in _KEYMAP.
+        mapped = _MODMAP.get(key) or _KEYMAP.get(key, key)
         ActionChains(self._driver).key_down(mapped).perform()
 
     def keyboard_up(self, key: str) -> None:
         self._activate()
-        _mods, mapped = _parse_key(key)
+        mapped = _MODMAP.get(key) or _KEYMAP.get(key, key)
         ActionChains(self._driver).key_up(mapped).perform()
 
     def keyboard_press(self, key: str) -> None:

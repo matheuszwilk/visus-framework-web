@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 class Mouse:
     """Absolute-coordinate pointer device facade."""
 
-    def __init__(self, delegate: "PageDelegate") -> None:
+    def __init__(self, delegate: PageDelegate) -> None:
         self._d = delegate
 
     def move(self, x: float, y: float) -> None:
@@ -46,7 +46,7 @@ class Mouse:
 class Keyboard:
     """Keyboard input facade."""
 
-    def __init__(self, delegate: "PageDelegate") -> None:
+    def __init__(self, delegate: PageDelegate) -> None:
         self._d = delegate
 
     def down(self, key: str) -> None:

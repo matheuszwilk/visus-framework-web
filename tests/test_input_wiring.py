@@ -23,18 +23,36 @@ class _CapturingFakePage:
         self._closed = False
 
     # --- minimal PageDelegate stubs required by Protocol ---
-    def goto(self, url, *, wait_until, timeout_ms): self._url = url
-    def current_url(self): return self._url
-    def title(self): return ""
-    def content(self): return ""
+    def goto(self, url, *, wait_until, timeout_ms):
+        self._url = url
+
+    def current_url(self):
+        return self._url
+
+    def title(self):
+        return ""
+
+    def content(self):
+        return ""
+
     def reload(self, *, timeout_ms): ...
     def go_back(self, *, timeout_ms): ...
     def go_forward(self, *, timeout_ms): ...
-    def close(self): self._closed = True
-    def is_closed(self): return self._closed
-    def locator_count(self, selector): return 0
-    def locator_is_visible(self, selector): return False
-    def locator_text_content(self, selector): return None
+    def close(self):
+        self._closed = True
+
+    def is_closed(self):
+        return self._closed
+
+    def locator_count(self, selector):
+        return 0
+
+    def locator_is_visible(self, selector):
+        return False
+
+    def locator_text_content(self, selector):
+        return None
+
     def locator_click(self, selector, *, timeout_ms, force): ...
     def locator_fill(self, selector, value, *, timeout_ms, force): ...
     def locator_hover(self, selector, *, timeout_ms, force): ...
@@ -46,36 +64,86 @@ class _CapturingFakePage:
     def locator_blur(self, selector, *, timeout_ms): ...
     def locator_clear(self, selector, *, timeout_ms, force): ...
     def locator_drag_to(self, selector, target, *, timeout_ms): ...
-    def locator_input_value(self, selector): return ""
-    def locator_state(self, selector, state): return False
-    def locator_all_text(self, selector): return []
-    def locator_get_attribute(self, selector, name): return None
+    def locator_input_value(self, selector):
+        return ""
+
+    def locator_state(self, selector, state):
+        return False
+
+    def locator_all_text(self, selector):
+        return []
+
+    def locator_get_attribute(self, selector, name):
+        return None
+
     def expect_poll(self, selector, matcher, arg, *, is_not, timeout_ms): ...
-    def evaluate(self, expression, arg): return None
-    def locator_evaluate(self, selector, expression, arg): return None
-    def screenshot(self, *, full_page): return b""
-    def locator_screenshot(self, selector): return b""
+    def evaluate(self, expression, arg):
+        return None
+
+    def locator_evaluate(self, selector, expression, arg):
+        return None
+
+    def screenshot(self, *, full_page):
+        return b""
+
+    def locator_screenshot(self, selector):
+        return b""
+
     def locator_set_input_files(self, selector, paths): ...
-    def snapshot_handles(self): return []
-    def adopt_new_handle(self, before, *, timeout_ms): return _CapturingFakePage()
-    def handle_next_dialog(self, *, accept, prompt_text, timeout_ms): return ("", "dialog")
-    def snapshot(self): return []
-    def pdf(self): return b""
-    def snapshot_download_dir(self): return []
-    def wait_for_download(self, before, *, timeout_ms): return ("/tmp/f", "f")
+    def snapshot_handles(self):
+        return []
+
+    def adopt_new_handle(self, before, *, timeout_ms):
+        return _CapturingFakePage()
+
+    def handle_next_dialog(self, *, accept, prompt_text, timeout_ms):
+        return ("", "dialog")
+
+    def snapshot(self):
+        return []
+
+    def pdf(self):
+        return b""
+
+    def snapshot_download_dir(self):
+        return []
+
+    def wait_for_download(self, before, *, timeout_ms):
+        return ("/tmp/f", "f")
 
     # --- new input device delegate methods ---
-    def mouse_move(self, x, y): self.calls.append(("mouse_move", x, y))
-    def mouse_down(self): self.calls.append(("mouse_down",))
-    def mouse_up(self): self.calls.append(("mouse_up",))
-    def mouse_click(self, x, y): self.calls.append(("mouse_click", x, y))
-    def mouse_dblclick(self, x, y): self.calls.append(("mouse_dblclick", x, y))
-    def mouse_wheel(self, delta_x, delta_y): self.calls.append(("mouse_wheel", delta_x, delta_y))
-    def keyboard_down(self, key): self.calls.append(("keyboard_down", key))
-    def keyboard_up(self, key): self.calls.append(("keyboard_up", key))
-    def keyboard_press(self, key): self.calls.append(("keyboard_press", key))
-    def keyboard_type(self, text): self.calls.append(("keyboard_type", text))
-    def keyboard_insert_text(self, text): self.calls.append(("keyboard_insert_text", text))
+    def mouse_move(self, x, y):
+        self.calls.append(("mouse_move", x, y))
+
+    def mouse_down(self):
+        self.calls.append(("mouse_down",))
+
+    def mouse_up(self):
+        self.calls.append(("mouse_up",))
+
+    def mouse_click(self, x, y):
+        self.calls.append(("mouse_click", x, y))
+
+    def mouse_dblclick(self, x, y):
+        self.calls.append(("mouse_dblclick", x, y))
+
+    def mouse_wheel(self, delta_x, delta_y):
+        self.calls.append(("mouse_wheel", delta_x, delta_y))
+
+    def keyboard_down(self, key):
+        self.calls.append(("keyboard_down", key))
+
+    def keyboard_up(self, key):
+        self.calls.append(("keyboard_up", key))
+
+    def keyboard_press(self, key):
+        self.calls.append(("keyboard_press", key))
+
+    def keyboard_type(self, text):
+        self.calls.append(("keyboard_type", text))
+
+    def keyboard_insert_text(self, text):
+        self.calls.append(("keyboard_insert_text", text))
 
 
 @pytest.fixture
@@ -92,9 +160,11 @@ def page(fake_page):
 # page.mouse property
 # ---------------------------------------------------------------------------
 
+
 class TestMouseProperty:
     def test_mouse_property_returns_mouse_object(self, page):
         from visus.web.api.input import Mouse
+
         assert isinstance(page.mouse, Mouse)
 
     def test_mouse_move_delegates(self, page, fake_page):
@@ -126,9 +196,11 @@ class TestMouseProperty:
 # page.keyboard property
 # ---------------------------------------------------------------------------
 
+
 class TestKeyboardProperty:
     def test_keyboard_property_returns_keyboard_object(self, page):
         from visus.web.api.input import Keyboard
+
         assert isinstance(page.keyboard, Keyboard)
 
     def test_keyboard_down_delegates(self, page, fake_page):

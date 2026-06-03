@@ -102,14 +102,14 @@ class Page:
         return data
 
     @property
-    def mouse(self) -> "Mouse":
+    def mouse(self) -> Mouse:
         """Low-level mouse device for absolute-coordinate pointer actions."""
         from visus.web.api.input import Mouse
 
         return Mouse(self._delegate)
 
     @property
-    def keyboard(self) -> "Keyboard":
+    def keyboard(self) -> Keyboard:
         """Low-level keyboard device for raw key events and text input."""
         from visus.web.api.input import Keyboard
 
