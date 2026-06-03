@@ -1,0 +1,11 @@
+<!doctype html><html><head><title>backtrack</title></head><body>
+<button id="prepare" onclick="
+  window.count=(window.count||0)+1;
+  if(window.count>=2 && !document.getElementById('t2')) mk('t2','r2');
+  if(window.count>=3 && !document.getElementById('t3')) mk('t3','r3');
+">Prepare</button>
+<div id="r2"></div><div id="r3"></div>
+<script>
+function mk(id,res){var b=document.createElement('button');b.id=id;b.textContent=id;
+  b.onclick=function(){document.getElementById(res).textContent='clicked';};document.body.appendChild(b);}
+</script></body></html>
