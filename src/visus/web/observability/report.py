@@ -426,6 +426,10 @@ def _group_runs(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
         run["events"].append(e)
     for run in runs:
         evs = run["events"]
+        # Order chronologically by when each step started. Backtrack replays are
+        # recorded mid-action (before the action's own event), so without this they
+        # would sort *before* the step that triggered them.
+        evs.sort(key=lambda e: e.get("start_ts") or 0.0)
         run["ts"] = evs[0].get("timestamp", "")
         run["ok"] = sum(1 for e in evs if e.get("success"))
         run["total"] = len(evs)

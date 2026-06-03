@@ -52,6 +52,7 @@ def rpa(
     report: bool = True,
     summary: bool = True,
     open_report: bool = False,
+    reraise: bool = False,
 ) -> Iterator[Page]:
     """Run an RPA with launch, recording, the HTML report, and a summary handled for you.
 
@@ -65,8 +66,13 @@ def rpa(
         report: render report.html on exit (it is written even when a step fails).
         summary: print a one-block run summary on exit.
         open_report: open report.html in the default browser on exit.
+        reraise: on a failed step, re-raise the original :class:`~visus.web.errors.VisusWebError`
+            (for programmatic handling). Default ``False``: the friendly summary already
+            explains the failure, so the process just exits with code 1 — no internal
+            traceback dumped to your console.
     """
-    from visus.web import launch  # local import: avoid an import cycle at module load
+    from visus.web import errors as _errors  # local import: avoid an import cycle
+    from visus.web import launch
 
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     base = Path(outdir) if outdir else Path.cwd() / "visus-runs" / f"{_slug(name)}-{stamp}"
@@ -75,33 +81,49 @@ def rpa(
     report_path = base / "report.html"
 
     box: dict[str, Any] = {}
+    rpa_error: BaseException | None = None
     try:
         with tracing.record(str(zip_path), report=str(report_path) if report else None) as rec:
             box["rec"] = rec
             with launch(engine, headless=headless) as browser:
                 yield browser.new_page()
+    except _errors.VisusWebError as exc:
+        rpa_error = exc  # expected RPA failure → present it cleanly (no traceback dump)
     finally:
         recorder = box.get("rec")
-        failed = sys.exc_info()[0] is not None
+        active = rpa_error if rpa_error is not None else sys.exc_info()[1]
         if summary and recorder is not None:
-            _print_summary(recorder, base, report_path if report else None, failed=failed)
+            _print_summary(recorder, base, report_path if report else None, error=active)
         if open_report and report:
             try:
                 webbrowser.open(report_path.resolve().as_uri())
             except Exception:
                 pass
 
+    # Only reached when no *unexpected* exception is propagating. For a failed RPA
+    # step: re-raise it if asked, otherwise exit cleanly with code 1 — the friendly
+    # summary above already explained why, so there is no scary internal traceback.
+    if rpa_error is not None:
+        if reraise:
+            raise rpa_error
+        raise SystemExit(1)
 
-def _print_summary(rec: Any, base: Path, report_path: Path | None, *, failed: bool) -> None:
+
+def _print_summary(
+    rec: Any, base: Path, report_path: Path | None, *, error: BaseException | None = None
+) -> None:
     s = rec.summary()
     steps = ", ".join(f"{a}{'' if ok else '(FAILED)'}" for a, ok in s["steps"])
-    status = "FAILED" if (failed or s["failures"]) else "OK"
+    status = "FAILED" if (error is not None or s["failures"]) else "OK"
     print(f"\n=== visus.web RPA [{status}] ===")
     print(f"actions   : {s['total']}")
     print(f"failures  : {s['failures']}")
     print(f"backtrack : {s['backtrack_steps']} step(s) replayed")
     if steps:
         print(f"steps     : {steps}")
+    if error is not None:
+        # surface the friendly action-error cleanly (indented), not buried in a traceback
+        print("error     : " + "\n            ".join(str(error).splitlines()))
     print(f"folder    : {base}")
     if report_path is not None:
         print(f"report    : {report_path}")

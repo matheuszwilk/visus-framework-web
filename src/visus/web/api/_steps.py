@@ -120,7 +120,9 @@ def _execute(delegate: object, action: Callable[[], None], depth: int, recorder:
             exc.backtrack_steps = attempted  # type: ignore[attr-defined]
             if in_replay:
                 _log.warning("backtrack: a replayed step failed — the page may have moved on")
-            raise
+            # `from None`: the first attempt and the retry are the same failure — don't
+            # chain them into a noisy "During handling of the above exception" traceback.
+            raise exc from None
         _record_step(delegate, action)
         return attempted
     _record_step(delegate, action)

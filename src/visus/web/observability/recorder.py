@@ -155,8 +155,12 @@ class Recorder:
         events_logger.info(json.dumps(event))
 
     def summary(self) -> dict[str, Any]:
-        """Lightweight in-memory run summary (no zip parsing needed)."""
-        ev = self._events
+        """Lightweight in-memory run summary (no zip parsing needed).
+
+        Steps are ordered chronologically by start time, so a backtrack's replayed
+        steps sit after the action that triggered them (matching the report).
+        """
+        ev = sorted(self._events, key=lambda e: e.get("start_ts") or 0.0)
         return {
             "total": len(ev),
             "failures": sum(1 for e in ev if not e.get("success")),
