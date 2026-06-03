@@ -468,6 +468,28 @@ async def test_async_context_add_cookies(base_url: str) -> None:
 
 
 # ---------------------------------------------------------------------------
+# H: Async backtrack — mirrors test_backtrack_reexecutes_previous_step
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.browser
+async def test_async_backtrack_reexecutes_previous_step(base_url: str) -> None:
+    """Async version: backtrack=True re-runs the previous step, making #t2 appear."""
+    async with await launch(headless=True) as browser:
+        page = await browser.new_page()
+        await page.goto(f"{base_url}/backtrack.html")
+
+        # Step A: click Prepare (count=1, recorded as _last_step on delegate)
+        await page.get_by_role("button", name="Prepare").click()
+
+        # #t2 needs count>=2; first attempt fails -> backtrack re-runs Prepare
+        # (count=2 -> #t2 appears) -> retry succeeds
+        await page.locator("#t2").click(backtrack=True, timeout=800)
+
+        assert await page.locator("#r2").text_content() == "clicked"
+
+
+# ---------------------------------------------------------------------------
 # G: AsyncFrameLocator — click inside iframe, assert via frame_locator
 # ---------------------------------------------------------------------------
 
