@@ -13,15 +13,30 @@ pip install "visus-web[cli]"          # + the `visus` CLI (incl. codegen)
 
 ## Quickstart
 
+Batteries included — write only the automation; visus.web launches the browser,
+records the run, writes an HTML report (even on failure), and prints a summary:
+
+```python
+from visus.web import rpa, expect
+
+with rpa("login", engine="chrome") as page:               # "chrome" | "edge" | "firefox"
+    page.goto("https://example.com/login")
+    page.get_by_role("button", name="Sign in").click()    # auto-waits until actionable
+    page.get_by_label("Email").fill("ada@example.com")
+    expect(page.get_by_text("Welcome")).to_be_visible()   # auto-retries until true
+# → ./visus-runs/login-<ts>/report.html  (+ run.zip, + a printed summary)
+```
+
+Need full control (multiple pages, custom contexts)? Drop down to `launch`:
+
 ```python
 from visus.web import launch, expect
 
 with launch(headless=True) as browser:
     page = browser.new_page()
     page.goto("https://example.com")
-    page.get_by_role("button", name="Sign in").click()    # auto-waits until actionable
-    page.get_by_label("Email").fill("ada@example.com")
-    expect(page.get_by_text("Welcome")).to_be_visible()   # auto-retries until true
+    page.get_by_role("button", name="Sign in").click()
+    expect(page.get_by_text("Welcome")).to_be_visible()
 ```
 
 ## What's inside
