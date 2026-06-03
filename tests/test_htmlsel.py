@@ -67,3 +67,33 @@ def test_translate_returns_all_formats() -> None:
     assert r2["xpath"] == '//input[@name="email"]'
     assert r2["id"] is None
     assert isinstance(r2["class"], str) and r2["class"].startswith("input.flex")
+
+
+def test_translate_id_with_special_chars_uses_attr_selector() -> None:
+    r = translate('<div id="user:name"></div>')
+    assert r["id"] == '[id="user:name"]'  # not #user:name (invalid CSS)
+    assert r["css"] == '[id="user:name"]'
+
+
+def test_candidates_no_attrs_falls_back_to_tag() -> None:
+    assert candidates("span", {}, "") == [{"css": "span"}]
+
+
+def test_combined_css_needs_two_identifying_attrs() -> None:
+    from visus.web.api._htmlsel import _combined_css
+
+    assert _combined_css("input", {"name": "x"}) == ""  # only one key → no combined selector
+    assert _combined_css("a", {"href": "/x", "role": "button"}) == 'a[role="button"][href="/x"]'
+
+
+def test_xq_handles_quotes() -> None:
+    from visus.web.api._htmlsel import _xq
+
+    assert _xq("plain") == '"plain"'
+    assert _xq('has"double') == "'has\"double'"  # fall back to single quotes
+    assert _xq("a\"b'c").startswith("concat(")  # both quotes → concat()
+
+
+def test_text_candidate_for_buttons() -> None:
+    cands = candidates("button", {"data-action": "save"}, "Save")
+    assert {"xpath": '//button[normalize-space()="Save"]'} in cands

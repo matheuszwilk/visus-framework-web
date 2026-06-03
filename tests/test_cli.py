@@ -18,8 +18,24 @@ def test_version() -> None:
 def test_help_lists_commands() -> None:
     r = runner.invoke(app, ["--help"])
     assert r.exit_code == 0
-    for cmd in ("doctor", "screenshot", "pdf", "codegen", "mcp", "open", "run", "install"):
+    for cmd in ("doctor", "screenshot", "pdf", "codegen", "mcp", "open", "run", "translate"):
         assert cmd in r.output, f"command {cmd!r} missing from --help output"
+
+
+def test_translate_outputs_selectors() -> None:
+    r = runner.invoke(app, ["translate", '<input id="password" type="password" name="pwd">'])
+    assert r.exit_code == 0
+    assert "#password" in r.output  # id
+    assert 'input[name="pwd"]' in r.output  # css
+    assert '//input[@name="pwd"]' in r.output  # xpath
+
+
+def test_translate_escapes_tailwind_classes() -> None:
+    r = runner.invoke(app, ["translate", '<input class="file:border-0 pr-[88px]" name="email">'])
+    assert r.exit_code == 0
+    assert r"file\:border-0" in r.output
+    assert r"pr-\[88px\]" in r.output
+    assert 'input[name="email"]' in r.output
 
 
 def test_doctor_failed_engine(monkeypatch: pytest.MonkeyPatch) -> None:

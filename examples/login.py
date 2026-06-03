@@ -23,7 +23,7 @@ with rpa("practice-login", engine=ENGINE, open_report=True) as page:  # add open
     page.locator('<input type="password" name="password" id="password">').fill(PASSWORD)  # locator por XPath
 
     # 3) enviar — locator semântico por role
-    page.get_by_role('<button id="submit" class="btn">Submit</button>', name="Submit").click()
+    page.get_by_role('<button id="submit" class="btn">Submit</button>').click()
 
     # 4) validar login: expect() com auto-retry atravessa a navegação real
     expect(page.get_by_role("heading", name="Logged In Successfully")).to_be_visible()

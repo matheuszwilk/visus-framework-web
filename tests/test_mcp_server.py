@@ -105,6 +105,17 @@ def test_tool_count_matches_inventory() -> None:
     )
 
 
+def test_translate_element_tool_returns_selectors() -> None:
+    """browser_translate_element parses a pasted element into selectors (no browser)."""
+    from visus.web.mcp import server
+
+    r = server.browser_translate_element('<input id="x" name="y" type="text">')
+    assert r["id"] == "#x"
+    assert r["css"] == "#x"
+    assert r["name"] == "y"
+    assert r["xpath"] == '//input[@name="y"]'
+
+
 @pytest.mark.parametrize("tool_name", _EXPECTED_TOOLS)
 def test_tool_registered(tool_name: str) -> None:
     """Each individual tool name must be in the registry."""

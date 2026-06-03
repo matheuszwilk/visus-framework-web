@@ -43,3 +43,12 @@ def test_describe_chain_with_nth() -> None:
 
 def test_describe_falls_back_on_bad_json() -> None:
     assert describe_target("not-json") == "not-json"
+
+
+def test_describe_smart_pasted_element() -> None:
+    from visus.web.api._htmlsel import smart_step
+
+    sel = json.dumps([smart_step('<input id="email" name="e" type="text">')])
+    desc = describe_target(sel)
+    assert "pasted element" in desc
+    assert "input" in desc
