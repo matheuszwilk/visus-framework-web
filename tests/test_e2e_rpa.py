@@ -49,3 +49,17 @@ def test_rpa_clean_exit_on_failure(base_url, tmp_path) -> None:  # type: ignore[
             page.locator("#nope-xyz").click(timeout=400)
     assert ei.value.code == 1
     assert (out / "report.html").exists()
+
+
+@pytest.mark.browser
+def test_rpa_clean_exit_on_expect_failure(base_url, tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """A failed expect()/assert is handled cleanly too (code 1, no traceback)."""
+    from visus.web import expect
+
+    out = tmp_path / "out"
+    with pytest.raises(SystemExit) as ei:
+        with rpa("t", headless=True, outdir=str(out), summary=False) as page:
+            page.goto(f"{base_url}/forms.html")
+            expect(page.get_by_role("heading", name="No Such Heading")).to_be_visible(timeout=400)
+    assert ei.value.code == 1
+    assert (out / "report.html").exists()

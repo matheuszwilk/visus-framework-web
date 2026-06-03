@@ -87,8 +87,10 @@ def rpa(
             box["rec"] = rec
             with launch(engine, headless=headless) as browser:
                 yield browser.new_page()
-    except _errors.VisusWebError as exc:
-        rpa_error = exc  # expected RPA failure → present it cleanly (no traceback dump)
+    except (_errors.VisusWebError, AssertionError) as exc:
+        # an action failure (VisusWebError) OR an expect()/assert failure → present it
+        # cleanly (friendly summary + exit 1) instead of dumping an internal traceback.
+        rpa_error = exc
     finally:
         recorder = box.get("rec")
         active = rpa_error if rpa_error is not None else sys.exc_info()[1]
