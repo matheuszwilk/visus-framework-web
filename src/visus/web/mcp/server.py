@@ -6,13 +6,31 @@ Run via: uv run visus-web-mcp   (or python -m visus.web.mcp.server)
 
 from __future__ import annotations
 
+import time
+
 from mcp.server.fastmcp import FastMCP, Image
 
+from visus.web import errors
 from visus.web.api.assertions import expect
+from visus.web.api.locator import Locator
 from visus.web.mcp.session import Session, make_locator
 
 mcp = FastMCP("visus-web")
 _session = Session()
+
+
+def _any_match_visible(loc: Locator) -> bool:
+    """True if at least one element the locator matches is visible.
+
+    Tolerant of mid-navigation errors (treated as "not yet visible") and of
+    locators that match several elements — so an agent can wait by a loose
+    target (e.g. text=) even when a hidden duplicate sorts first in the DOM.
+    """
+    try:
+        return any(loc.nth(i).is_visible() for i in range(loc.count()))
+    except errors.VisusWebError:
+        return False
+
 
 # ---------------------------------------------------------------------------
 # Navigation
@@ -91,7 +109,7 @@ def browser_get_text(
     loc = make_locator(
         page, selector=selector, role=role, name=name, text=text, exact=exact, frame=frame
     )
-    return loc.text_content()
+    return loc.first().text_content()  # tolerate multi-match (agent-friendly read)
 
 
 @mcp.tool()
@@ -109,7 +127,7 @@ def browser_get_attribute(
     loc = make_locator(
         page, selector=selector, role=role, name=name, text=text, exact=exact, frame=frame
     )
-    return loc.get_attribute(attr_name)
+    return loc.first().get_attribute(attr_name)  # tolerate multi-match
 
 
 @mcp.tool()
@@ -366,11 +384,15 @@ def browser_wait_for(
     loc = make_locator(
         page, selector=selector, role=role, name=name, text=text, exact=exact, frame=frame
     )
-    if state == "hidden":
-        expect(loc).not_.to_be_visible(timeout=timeout)
-    else:
-        expect(loc).to_be_visible(timeout=timeout)
-    return f"element is {state}"
+    ms = 5000 if timeout is None else timeout
+    want_visible = state != "hidden"
+    deadline = time.monotonic() + ms / 1000.0
+    while True:
+        if _any_match_visible(loc) == want_visible:
+            return f"element is {state}"
+        if time.monotonic() >= deadline:
+            raise AssertionError(f"wait_for: no element became {state} within {ms}ms")
+        time.sleep(0.1)
 
 
 @mcp.tool()
@@ -390,7 +412,7 @@ def browser_expect_text(
         page, selector=selector, role=role, name=name, text=text, exact=exact, frame=frame
     )
     try:
-        expect(loc).to_have_text(expected_text, timeout=timeout)
+        expect(loc.first()).to_have_text(expected_text, timeout=timeout)
         return "PASSED"
     except AssertionError as exc:
         return f"FAILED: {exc}"
