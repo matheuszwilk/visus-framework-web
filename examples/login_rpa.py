@@ -69,7 +69,7 @@ def main() -> None:
                 # 6) caso negativo: senha inválida -> mensagem de erro (expect em texto exato)
                 page.locator("css=#username").fill(USERNAME)
                 page.locator("css=#password").fill("SenhaErrada")
-                page.get_by_role("button", name="Submits").click(backtrack=2, timeout=1500)
+                page.get_by_role("button", name="Submits").click(backtrack=2, timeout=5000)
                 expect(page.locator("#error")).to_have_text("Your password is invalid!")
 
                 # 7) falha proposital NÃO tratada: o botão "Submits" não existe. backtrack=2

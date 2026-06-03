@@ -17,15 +17,18 @@ Backtrack is **not** a retry loop: the failed step is retried exactly once after
 the replay.  Each delegate carries a rolling history of its last 3 successful
 steps, so this behaves identically for the sync and async (to_thread) APIs.
 
-When tracing is active the step is timed and an event (+ screenshots) is emitted
-via the active Recorder.  With tracing OFF the behaviour is the same minus the
-recording overhead.
+When tracing is active each step is timed and an event (+ highlighted screenshot)
+is emitted via the active Recorder — *including the replayed backtrack steps*,
+which appear in the report timeline as ``↻`` events.  With tracing OFF the
+behaviour is the same minus the recording overhead.
 """
 
 from __future__ import annotations
 
 import logging
+import time
 from collections.abc import Callable
+from typing import Any
 
 from visus.web import errors
 
@@ -49,14 +52,52 @@ def _record_step(delegate: object, action: Callable[[], None]) -> None:
     del history[:-MAX_BACKTRACK]  # keep only the most recent MAX_BACKTRACK steps
 
 
-def _execute(delegate: object, action: Callable[[], None], depth: int) -> int:
+def _replay_one(step: Callable[[], None], recorder: Any, delegate: object) -> None:
+    """Re-run a previous step during a backtrack.
+
+    When tracing, record it as a ``↻`` replay event (with a highlighted screenshot)
+    so the backtrack's replayed steps are visible in the report — using the metadata
+    tagged onto the action by :func:`run_step`.  A replay failure is recorded then
+    re-raised.
+    """
+    meta = getattr(step, "_visus_step", None)
+    if recorder is None or meta is None:
+        step()  # plain replay (no tracing, or an untagged history entry)
+        return
+    start = time.monotonic()
+    start_ts = time.time()
+    success = True
+    error: str | None = None
+    try:
+        step()
+    except errors.VisusWebError as exc:
+        success = False
+        error = str(exc)
+        raise
+    finally:
+        recorder.record_action(
+            delegate,
+            action="replay " + str(meta.get("name") or "step"),
+            selector=meta.get("selector"),
+            target=meta.get("target"),
+            start_ts=start_ts,
+            end_ts=time.time(),
+            duration_ms=int((time.monotonic() - start) * 1000),
+            success=success,
+            error=error,
+            backtrack_steps=0,
+        )
+
+
+def _execute(delegate: object, action: Callable[[], None], depth: int, recorder: Any = None) -> int:
     """Run ``action`` once; backtrack on failure.
 
     On :exc:`~visus.web.errors.VisusWebError`, if *depth* > 0, re-run the last
     *depth* successful steps (oldest→newest) then retry ``action`` exactly once.
-    Returns the number of steps replayed (0 when the action succeeded on the first
-    try).  Records the action as a successful step on success; re-raises if it
-    still fails or if there is nothing to backtrack to.
+    Each replayed step is recorded via *recorder* when tracing is active.  Returns
+    the number of steps replayed (0 when the action succeeded on the first try).
+    Records the action as a successful step on success; re-raises if it still fails
+    or if there is nothing to backtrack to.
     """
     try:
         action()
@@ -70,7 +111,7 @@ def _execute(delegate: object, action: Callable[[], None], depth: int) -> int:
         in_replay = True
         try:
             for step in replay:
-                step()  # re-run the previous step(s)
+                _replay_one(step, recorder, delegate)  # re-run (and record) the previous step(s)
             in_replay = False
             action()  # then retry the failed step ONCE
         except errors.VisusWebError as exc:
@@ -103,9 +144,18 @@ def run_step(
     delegate's most recent successful step.
 
     *action_name*, *selector*, and *target* are forwarded to the :class:`Recorder`
-    when tracing is active; they are ignored on the fast path.
+    when tracing is active (and tagged onto *action* so a later backtrack replay of
+    this step can be recorded too); they are ignored on the fast path.
     """
     from visus.web import tracing
+
+    # Tag the action with its metadata so that, if a later step backtracks and
+    # replays this one, the replay can be recorded with the right label/screenshot.
+    action._visus_step = {  # type: ignore[attr-defined]
+        "name": action_name,
+        "selector": selector,
+        "target": target,
+    }
 
     if not tracing.is_enabled() or tracing.current_recorder() is None:
         _run_plain(delegate, action, backtrack)
@@ -136,8 +186,6 @@ def _run_traced(
     target: str | None,
 ) -> None:
     """Traced path: same semantics as _run_plain but times the step and records an event."""
-    import time
-
     from visus.web import tracing
 
     rec = tracing.current_recorder()
@@ -155,7 +203,7 @@ def _run_traced(
     label = target or selector or ""
     _log.info("%s → %s", action_name, label)
     try:
-        steps_replayed = _execute(delegate, action, depth)
+        steps_replayed = _execute(delegate, action, depth, recorder=rec)
         success = True
     except errors.VisusWebError as exc:
         error = str(exc)

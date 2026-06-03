@@ -99,6 +99,11 @@ def test_backtrack_steps_recorded_under_tracing(browser, base_url, tmp_path):
     assert recovered[0]["action"] == "click" and recovered[0]["success"]
     assert all("backtrack_cycles" not in e for e in events), "old key must be gone"
 
+    # the backtrack's replayed steps are themselves recorded, each with a screenshot
+    replays = [e for e in events if str(e.get("action", "")).startswith("replay ")]
+    assert len(replays) == 3, f"expected 3 replay events, got {[e['action'] for e in events]}"
+    assert all(e.get("screenshot") for e in replays), "each replayed step should have a screenshot"
+
     html_path = tmp_path / "report.html"
     tracing.render_report(str(zip_path), str(html_path))
     html = html_path.read_text(encoding="utf-8")
