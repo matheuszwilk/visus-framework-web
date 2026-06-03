@@ -59,6 +59,12 @@ src = ["src", "tests"]
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
 
+[tool.ruff.lint.per-file-ignores]
+# Long lines in CSS/HTML/JS string literals are unavoidable
+"src/visus/web/observability/report.py" = ["E501"]
+"src/visus/web/backends/selenium/driver_delegate.py" = ["E501"]
+"src/visus/web/tracing.py" = ["E501"]
+
 [tool.mypy]
 python_version = "3.10"
 packages = ["visus.web"]

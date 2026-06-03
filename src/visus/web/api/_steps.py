@@ -53,9 +53,7 @@ def run_step(
     )
 
 
-def _run_plain(
-    delegate: object, action: Callable[[], None], backtrack: bool | int
-) -> None:
+def _run_plain(delegate: object, action: Callable[[], None], backtrack: bool | int) -> None:
     """Fast path: unchanged backtrack semantics, zero tracing overhead."""
     budget = int(backtrack)  # False→0, True→1, N→N
     while True:

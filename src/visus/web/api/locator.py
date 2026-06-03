@@ -301,9 +301,7 @@ class Locator:
             Path(path).write_bytes(data)
         return data
 
-    def set_input_files(
-        self, files: str | list[str], *, backtrack: bool | int = False
-    ) -> None:
+    def set_input_files(self, files: str | list[str], *, backtrack: bool | int = False) -> None:
         paths = [files] if isinstance(files, str) else list(files)
         run_step(
             self._delegate,

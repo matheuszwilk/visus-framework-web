@@ -2,18 +2,15 @@
 
 from __future__ import annotations
 
-import os
 import zipfile
-
-import pytest
 
 from visus.web import tracing
 from visus.web.tracing import _env_on
 
-
 # ---------------------------------------------------------------------------
 # helpers
 # ---------------------------------------------------------------------------
+
 
 def _reset() -> None:
     """Put tracing back to a known default state after each test."""

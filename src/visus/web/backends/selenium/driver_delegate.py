@@ -734,7 +734,7 @@ class SeleniumPageDelegate:
                 self._driver.execute_script("window.__visus.highlight(arguments[0]);", el)
             except WebDriverException:
                 pass
-        png = cast(bytes, self._driver.get_screenshot_as_png())
+        png: bytes = self._driver.get_screenshot_as_png()
         try:
             self._driver.execute_script("window.__visus.unhighlight();")
         except WebDriverException:

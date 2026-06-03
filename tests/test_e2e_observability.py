@@ -28,9 +28,7 @@ def test_record_zip_and_report(browser, base_url, tmp_path):
     assert "events.jsonl" in names and "manifest.json" in names
     assert any(n.startswith("screenshots/") and n.endswith(".png") for n in names)
     events = [
-        json.loads(line)
-        for line in z.read("events.jsonl").decode().splitlines()
-        if line.strip()
+        json.loads(line) for line in z.read("events.jsonl").decode().splitlines() if line.strip()
     ]
     assert any(e["action"] == "fill" and e["success"] for e in events)
     fail = [e for e in events if e["action"] == "click" and not e["success"]]
@@ -49,9 +47,7 @@ def test_highlight_is_cleaned_up(browser, base_url, tmp_path):
         page.goto(f"{base_url}/forms.html")
         page.get_by_label("Username").fill("x")
         # the highlight overlay must be removed after the screenshot
-        count = page.evaluate(
-            "() => document.querySelectorAll('[data-visus-highlight]').length"
-        )
+        count = page.evaluate("() => document.querySelectorAll('[data-visus-highlight]').length")
         assert count == 0
 
 

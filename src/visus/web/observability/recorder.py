@@ -47,14 +47,10 @@ class Recorder:
             meta = {}
         shot_ref = None
         if success and opts.screenshot_each_action:
-            shot_ref = self._save(
-                delegate, selector, f"{self.run_id}__{step_id}__{action}.png"
-            )
+            shot_ref = self._save(delegate, selector, f"{self.run_id}__{step_id}__{action}.png")
         fail_ref = None
         if not success and opts.screenshot_on_failure:
-            fail_ref = self._save(
-                delegate, selector, f"{self.run_id}__{step_id}__failure.png"
-            )
+            fail_ref = self._save(delegate, selector, f"{self.run_id}__{step_id}__failure.png")
         event: dict[str, Any] = {
             "run_id": self.run_id,
             "step_id": step_id,
@@ -97,8 +93,6 @@ class Recorder:
         }
         with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as z:
             z.writestr("manifest.json", json.dumps(manifest, indent=2))
-            z.writestr(
-                "events.jsonl", "\n".join(json.dumps(e) for e in self._events)
-            )
+            z.writestr("events.jsonl", "\n".join(json.dumps(e) for e in self._events))
             for name, data in self._shots.items():
                 z.writestr(f"screenshots/{name}", data)

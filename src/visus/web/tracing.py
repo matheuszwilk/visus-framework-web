@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Iterator
 from contextlib import contextmanager
-from typing import TYPE_CHECKING, Any, Iterator
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from visus.web.observability.recorder import Recorder
@@ -19,7 +20,7 @@ class _Tracing:
         self.enabled: bool = _env_on()
         self.screenshot_each_action: bool = True  # per-action shots ON by default
         self.screenshot_on_failure: bool = True
-        self.recorder: "Recorder | None" = None
+        self.recorder: Recorder | None = None
 
 
 _STATE = _Tracing()
@@ -42,7 +43,7 @@ def is_enabled() -> bool:
     return _STATE.enabled
 
 
-def current_recorder() -> "Recorder | None":
+def current_recorder() -> Recorder | None:
     """Return the active Recorder, or None if not inside a ``record()`` session."""
     return _STATE.recorder
 
@@ -53,7 +54,7 @@ def options() -> _Tracing:
 
 
 @contextmanager
-def record(zip_path: str, **opts: Any) -> "Iterator[Recorder]":
+def record(zip_path: str, **opts: Any) -> Iterator[Recorder]:
     """Context manager: enable tracing, collect events/screenshots, write zip on exit.
 
     Usage::

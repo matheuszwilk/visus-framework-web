@@ -8,7 +8,6 @@ import zipfile
 from pathlib import Path
 from typing import Any
 
-
 _STYLE = """
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body {
@@ -144,13 +143,11 @@ def render_report(zip_path: str, output: str = "report.html") -> str:
         shots: dict[str, bytes] = {}
         for n in names:
             if n.startswith("screenshots/") and n.endswith(".png"):
-                key = n[len("screenshots/"):]
+                key = n[len("screenshots/") :]
                 shots[key] = z.read(n)
 
     events: list[dict[str, Any]] = [
-        json.loads(line)
-        for line in events_raw.splitlines()
-        if line.strip()
+        json.loads(line) for line in events_raw.splitlines() if line.strip()
     ]
     manifest: dict[str, Any] = json.loads(manifest_raw)
 
@@ -158,9 +155,7 @@ def render_report(zip_path: str, output: str = "report.html") -> str:
     total_actions = counts.get("actions", len(events))
     failures = counts.get("failures", sum(1 for e in events if not e.get("success")))
     success_rate = (
-        f"{(total_actions - failures) / total_actions * 100:.0f}%"
-        if total_actions
-        else "N/A"
+        f"{(total_actions - failures) / total_actions * 100:.0f}%" if total_actions else "N/A"
     )
     total_duration = sum(e.get("duration_ms", 0) for e in events)
     distinct_pages = len({e.get("url") for e in events if e.get("url")})
@@ -184,7 +179,7 @@ def render_report(zip_path: str, output: str = "report.html") -> str:
     run_sections = ""
     for rid, evts in runs.items():
         steps_html = "".join(_step_html(e, shots) for e in evts)
-        run_sections += f'<h2>Run <code>{_esc(rid)}</code> — {len(evts)} action(s)</h2>{steps_html}'
+        run_sections += f"<h2>Run <code>{_esc(rid)}</code> — {len(evts)} action(s)</h2>{steps_html}"
 
     html = f"""<!DOCTYPE html>
 <html lang="en">
