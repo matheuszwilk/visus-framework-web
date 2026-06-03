@@ -18,6 +18,7 @@ dev = [
     "pytest-cov>=4.0.0",
     "pytest-xdist>=3.5.0",
     "pytest-timeout>=2.2.0",
+    "pytest-asyncio>=0.23.0",
     "ruff>=0.6.0",
     "mypy>=1.8.0",
     "pre-commit>=3.5.0",
@@ -48,6 +49,7 @@ markers = [
     "browser: integration test that launches a real headless browser",
 ]
 timeout = 60
+asyncio_mode = "auto"
 addopts = "-n auto --dist loadfile --cov=visus.web --cov-report=term-missing --cov-fail-under=90"
 
 [tool.ruff]
