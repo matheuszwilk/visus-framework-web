@@ -282,6 +282,31 @@
         var arr = roots.filter(function (x) { return x !== document; });
         var idx = step.index < 0 ? arr.length + step.index : step.index;
         out = (idx >= 0 && idx < arr.length) ? [arr[idx]] : [];
+      } else if (step.kind === "smart") {
+        // Pasted-element locator: try candidate selectors in order, preferring the
+        // first that matches a single element, else the first that matches any.
+        // Malformed / non-matching candidates are skipped (fault-tolerant).
+        var sFirst = null;
+        for (var sc = 0; sc < step.candidates.length; sc++) {
+          var cand = step.candidates[sc];
+          var sFound = [];
+          for (r = 0; r < roots.length; r++) {
+            base = roots[r];
+            try {
+              if (cand.css != null) {
+                sFound.push.apply(sFound, base.querySelectorAll(cand.css));
+              } else if (cand.xpath != null) {
+                var sCtx = (base === document) ? document : base;
+                var sRes = document.evaluate(cand.xpath, sCtx, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
+                for (j = 0; j < sRes.snapshotLength; j++) sFound.push(sRes.snapshotItem(j));
+              }
+            } catch (sErr) { /* skip a malformed or non-matching candidate */ }
+          }
+          sFound = dedupe(sFound);
+          if (sFound.length === 1) { out = sFound; sFirst = null; break; }
+          if (sFound.length > 0 && sFirst === null) sFirst = sFound;
+        }
+        if (out.length === 0 && sFirst !== null) out = sFirst;
       }
       current = dedupe(out);
     }

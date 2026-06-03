@@ -19,11 +19,11 @@ with rpa("practice-login", engine=ENGINE, open_report=True) as page:  # add open
     expect(page.get_by_role("heading", name="Test login")).to_be_visible()
 
                 # 2) preencher credenciais — CSS e XPath
-    page.locator("css=#username").fill(USERNAME)  # locator por CSS
-    page.locator("//input[@id='password']").fill(PASSWORD)  # locator por XPath
+    page.locator('<input type="text" name="username" id="username">').fill(USERNAME)  # locator por CSS
+    page.locator('<input type="password" name="password" id="password">').fill(PASSWORD)  # locator por XPath
 
     # 3) enviar — locator semântico por role
-    page.get_by_role("button", name="Submit").click()
+    page.get_by_role('<button id="submit" class="btn">Submit</button>', name="Submit").click()
 
     # 4) validar login: expect() com auto-retry atravessa a navegação real
     expect(page.get_by_role("heading", name="Logged In Successfully")).to_be_visible()
@@ -35,7 +35,7 @@ with rpa("practice-login", engine=ENGINE, open_report=True) as page:  # add open
     expect(page.get_by_role("button", name="Submit")).to_be_visible()
 
     # 6) caso negativo: senha inválida -> mensagem de erro (expect em texto exato)
-    page.locator("css=#username").fill(USERNAME)
-    page.locator("css=#password").fill("SenhaErrada")
-    page.get_by_role("button", name="Submits").click(backtrack=2, timeout=100)
-    expect(page.locator("#error")).to_have_text("Your password is invalid!")
+    page.locator('<input type="text" name="username" id="username">').fill(USERNAME)
+    page.locator('<input type="password" name="password" id="password">').fill("SenhaErrada")
+    page.get_by_role('<button id="submit" class="btn">Submit</button>', name="Submits").click(backtrack=2, timeout=100)
+    expect(page.locator('#error')).to_have_text("Your password is invalid!")

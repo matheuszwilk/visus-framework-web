@@ -1,0 +1,19 @@
+<!doctype html><html><head><meta charset="utf-8"><title>smartsel</title></head><body>
+<input id="password" type="password" name="pwd">
+<input class="md-search__input" name="query" aria-label="Search" placeholder="Search"
+       data-md-component="search-query" type="text">
+<input class="flex w-full file:border-0 focus:ring-2 pr-[88px]" placeholder="Your User Name"
+       type="text" value="" name="email">
+<button class="btn primary" data-action="save" id="saveBtn">Save</button>
+<div id="r"></div>
+<script>
+  document.querySelectorAll('input').forEach(function (inp) {
+    inp.addEventListener('input', function () {
+      document.getElementById('r').textContent = (this.name || this.id) + '=' + this.value;
+    });
+  });
+  document.getElementById('saveBtn').addEventListener('click', function () {
+    document.getElementById('r').textContent = 'saved';
+  });
+</script>
+</body></html>

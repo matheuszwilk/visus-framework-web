@@ -40,6 +40,14 @@ def _describe_step(step: dict[str, Any]) -> str:
         idx = step.get("index")
         which = {0: "first", -1: "last"}.get(idx, f"index {idx}")  # type: ignore[arg-type]
         return f"({which})"
+    if kind == "smart":
+        cands = step.get("candidates") or []
+        tag = step.get("tag") or "element"
+        first = ""
+        if cands and isinstance(cands[0], dict):
+            first = str(cands[0].get("css") or cands[0].get("xpath") or "")
+        suffix = f" (best: {first})" if first else ""
+        return f"<{tag}> pasted element, {len(cands)} candidate selector(s){suffix}"
     if kind == "frame":
         return "inside frame"
     return str(kind)

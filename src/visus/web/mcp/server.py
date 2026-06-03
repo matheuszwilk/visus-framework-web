@@ -84,6 +84,20 @@ def browser_snapshot() -> list[dict]:  # type: ignore[type-arg]
 
 
 @mcp.tool()
+def browser_translate_element(html: str) -> dict[str, object]:
+    """Translate a pasted DevTools element (Copy element) into selectors.
+
+    Given an element's outerHTML, returns the recommended id / css / xpath / class
+    selectors plus the full ordered candidate list the smart locator tries. Pure
+    parsing — no live page needed. The same css/xpath also works directly via
+    page.locator("<the pasted html>").
+    """
+    from visus.web.api._htmlsel import translate
+
+    return translate(html)
+
+
+@mcp.tool()
 def browser_title() -> str:
     """Return the current page title."""
     return _session.page().title()

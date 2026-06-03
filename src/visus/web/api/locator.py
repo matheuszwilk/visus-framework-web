@@ -50,6 +50,11 @@ class Locator:
         return self._child({"kind": "testid", "value": test_id})
 
     def locator(self, selector: str) -> Locator:
+        if selector.lstrip().startswith("<"):
+            # a pasted DevTools element (Copy element) → resilient, multi-candidate locator
+            from visus.web.api import _htmlsel
+
+            return self._child(_htmlsel.smart_step(selector))
         if selector.startswith("xpath="):
             return self._child({"kind": "xpath", "value": selector[len("xpath=") :]})
         if selector.startswith("css="):

@@ -42,6 +42,7 @@ with launch(headless=True) as browser:
 ## What's inside
 
 - **Semantic locators:** `get_by_role / text / label / placeholder / test_id / alt_text / title`, `locator(css|xpath)`, `first/last/nth/filter`, `frame_locator` (cross-origin & nested iframes).
+- **Paste-an-element locator:** `page.locator('<input name="email" class="…">')` — paste an element straight from DevTools ("Copy element") and visus.web derives an ordered set of selectors (id → `data-*` → name → aria → class → xpath, Tailwind classes escaped) and tries each until one matches — resilient to a changed id/class. `visus translate '<…>'` and the `browser_translate_element` MCP tool print the css/xpath/id/class.
 - **Auto-waited actions:** `click / dblclick / fill / press / hover / check / uncheck / set_checked / select_option / drag_to / focus / blur / clear / set_input_files` — no `sleep`, ever.
 - **Web-first assertions:** `expect(loc).to_be_visible / to_have_text / to_have_value / to_have_count / to_have_role / …` with `.not_` negation; all auto-retry.
 - **RPA:** `evaluate`, `screenshot` (element/full-page), `pdf`, cookies, `expect_popup`, `expect_dialog`, frames.

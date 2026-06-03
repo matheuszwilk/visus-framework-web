@@ -24,6 +24,28 @@ def version() -> None:
 
 
 @app.command()
+def translate(html: str) -> None:
+    """Translate a pasted DevTools element (Copy element) into css/xpath/id/class selectors."""
+    from visus.web.api._htmlsel import translate as _translate
+
+    r = _translate(html)
+    typer.echo(f"tag    : {r['tag']}")
+    if r["id"]:
+        typer.echo(f"id     : {r['id']}")
+    if r["name"]:
+        typer.echo(f"name   : {r['name']}")
+    if r["css"]:
+        typer.echo(f"css    : {r['css']}")
+    if r["xpath"]:
+        typer.echo(f"xpath  : {r['xpath']}")
+    if r["class"]:
+        typer.echo(f"class  : {r['class']}")
+    typer.echo("candidates (the smart locator tries these in order):")
+    for c in [*r["candidates_css"], *r["candidates_xpath"]]:  # type: ignore[misc]
+        typer.echo(f"  - {c}")
+
+
+@app.command()
 def doctor(engine: str = "chrome") -> None:
     """Check that a browser + driver launch correctly."""
     try:
