@@ -13,6 +13,54 @@ from visus.web import tracing
 
 events_logger = logging.getLogger("visus.web.events")
 
+# Third-party loggers too noisy to be useful in a run report.
+# Records from these (and their children) are dropped from the captured log tail.
+_NOISY_LOG_PREFIXES = (
+    "selenium",
+    "urllib3",
+    "PIL",
+    "onnxruntime",
+    "websocket",
+    "asyncio",
+    "trio",
+    "hpack",
+    "h2",
+    "charset_normalizer",
+)
+
+
+class _LogTailHandler(logging.Handler):
+    """Capture log records (with timestamps) emitted during a recording.
+
+    Attached to the ROOT logger so it captures the full trail of a run.
+    We drop:
+
+      * the dedicated ``visus.web.events`` logger (its JSON already lives in
+        ``events.jsonl``), and
+      * known-noisy third-party loggers -- selenium, urllib3, PIL, etc.
+        (see ``_NOISY_LOG_PREFIXES``).
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.records: list[tuple[float, str, str, str]] = []
+
+    def emit(self, record: logging.LogRecord) -> None:  # noqa: D401
+        name = record.name
+        if name == events_logger.name:
+            return
+        if any(name == p or name.startswith(p + ".") for p in _NOISY_LOG_PREFIXES):
+            return
+        try:
+            self.records.append((
+                record.created,
+                record.levelname,
+                name,
+                record.getMessage(),
+            ))
+        except Exception:  # pragma: no cover - defensive
+            pass
+
 
 class Recorder:
     """Accumulates per-action events and PNG screenshots for one tracing session."""
@@ -22,6 +70,24 @@ class Recorder:
         self._events: list[dict[str, Any]] = []
         self._shots: dict[str, bytes] = {}
         self._step = 0
+        # Log tail handler attached to root logger while recording
+        self._log_handler = _LogTailHandler()
+        self._prior_visus_level: int = logging.NOTSET
+        # Attach to root logger to capture all records
+        root_logger = logging.getLogger()
+        root_logger.addHandler(self._log_handler)
+        # Bump visus.web tree to DEBUG so narrative logs flow through
+        visus_logger = logging.getLogger("visus.web")
+        self._prior_visus_level = visus_logger.level
+        if self._prior_visus_level == logging.NOTSET or self._prior_visus_level > logging.DEBUG:
+            visus_logger.setLevel(logging.DEBUG)
+
+    def _detach(self) -> None:
+        """Remove the log handler and restore logger levels."""
+        root_logger = logging.getLogger()
+        root_logger.removeHandler(self._log_handler)
+        visus_logger = logging.getLogger("visus.web")
+        visus_logger.setLevel(self._prior_visus_level)
 
     def record_action(
         self,
@@ -51,6 +117,15 @@ class Recorder:
         fail_ref = None
         if not success and opts.screenshot_on_failure:
             fail_ref = self._save(delegate, selector, f"{self.run_id}__{step_id}__failure.png")
+
+        # ARIA snapshot on failure: best-effort
+        aria_snapshot: list[dict[str, Any]] | None = None
+        if not success:
+            try:
+                aria_snapshot = delegate.snapshot()
+            except Exception:
+                aria_snapshot = None
+
         event: dict[str, Any] = {
             "run_id": self.run_id,
             "step_id": step_id,
@@ -72,6 +147,8 @@ class Recorder:
             "start_ts": start_ts,
             "end_ts": end_ts,
         }
+        if aria_snapshot is not None:
+            event["aria_snapshot"] = aria_snapshot
         self._events.append(event)
         events_logger.info(json.dumps(event))
 
@@ -84,15 +161,49 @@ class Recorder:
 
     def write_zip(self, path: str) -> None:
         """Write events.jsonl + manifest.json + screenshots/*.png to a zip file."""
-        failures = sum(1 for e in self._events if not e["success"])
+        # Attach correlated logs to each event before writing
+        enriched = _attach_logs_to_events(self._events, self._log_handler.records)
+
+        # Detach handler and restore log levels now that we're done recording
+        self._detach()
+
+        failures = sum(1 for e in enriched if not e.get("success"))
         manifest = {
             "schema_version": 1,
             "created_at": datetime.now(timezone.utc).isoformat(),
-            "run_ids": sorted({e["run_id"] for e in self._events}),
-            "counts": {"actions": len(self._events), "failures": failures},
+            "run_ids": sorted({str(e.get("run_id", "")) for e in enriched}),
+            "counts": {"actions": len(enriched), "failures": failures},
         }
         with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as z:
             z.writestr("manifest.json", json.dumps(manifest, indent=2))
-            z.writestr("events.jsonl", "\n".join(json.dumps(e) for e in self._events))
+            z.writestr("events.jsonl", "\n".join(json.dumps(e) for e in enriched))
             for name, data in self._shots.items():
                 z.writestr(f"screenshots/{name}", data)
+
+
+def _attach_logs_to_events(
+    events: list[dict[str, Any]],
+    log_records: list[tuple[float, str, str, str]],
+) -> list[dict[str, Any]]:
+    """Inject a ``logs`` array into each event.
+
+    Walks events in order and claims all log records whose timestamp
+    falls inside ``(start_ts - 1e-3, end_ts + 1e-3]`` as belonging to
+    the current action.
+    """
+    if not log_records:
+        for event in events:
+            event.setdefault("logs", [])
+        return events
+    sorted_logs = sorted(log_records, key=lambda r: r[0])
+    for event in events:
+        start_ts = float(event.get("start_ts") or 0.0)
+        end_ts = float(event.get("end_ts") or 0.0)
+        window_start = start_ts - 0.001
+        window_end = end_ts + 0.001
+        event["logs"] = [
+            f"[{lvl}] {name}: {msg}"
+            for ts, lvl, name, msg in sorted_logs
+            if window_start < ts <= window_end
+        ]
+    return events

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from time import monotonic, sleep
 from typing import cast
@@ -10,6 +11,8 @@ from selenium.webdriver.remote.webdriver import WebDriver
 from selenium.webdriver.remote.webelement import WebElement
 
 from visus.web import errors
+
+_log = logging.getLogger("visus.web.actionability")
 
 _ACTION_STATES: dict[str, tuple[str, ...]] = {
     "click": ("visible", "enabled", "stable"),
@@ -106,12 +109,14 @@ def run_action(
         if el is not None:
             reason = None if force else _blocking_reason(driver, el, states, name)
             if reason is None:
+                _log.info("%s actionable after %d attempt(s)", name, retry + 1)
                 driver.execute_script(
                     "arguments[0].scrollIntoView({block:'center',inline:'center'});", el
                 )
                 dispatch(el)
                 return
             last_reason = reason
+            _log.debug("waiting: %s", reason)
         retry += 1
         if monotonic() > deadline:
             break

@@ -11,9 +11,12 @@ identical to the pre-observability implementation.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 
 from visus.web import errors
+
+_log = logging.getLogger("visus.web")
 
 
 def run_step(
@@ -96,6 +99,8 @@ def _run_traced(
     cycles = 0
     error: str | None = None
     success = False
+    label = target or selector or ""
+    _log.info("%s → %s", action_name, label)
     try:
         while True:
             try:
@@ -107,12 +112,18 @@ def _run_traced(
                 if budget > 0 and prev is not None:
                     budget -= 1
                     cycles += 1
+                    _log.info("backtrack: re-running previous step (cycle %d)", cycles)
                     prev()
                     continue
                 error = str(exc)
                 raise
         delegate._last_step = action  # type: ignore[attr-defined]
     finally:
+        duration_ms = int((time.monotonic() - start) * 1000)
+        if success:
+            _log.info("%s ✓ (%dms, %d backtrack)", action_name, duration_ms, cycles)
+        else:
+            _log.warning("%s ✗ %s", action_name, error or "")
         rec.record_action(
             delegate,
             action=action_name,
@@ -120,7 +131,7 @@ def _run_traced(
             target=target,
             start_ts=start_ts,
             end_ts=time.time(),
-            duration_ms=int((time.monotonic() - start) * 1000),
+            duration_ms=duration_ms,
             success=success,
             error=error,
             backtrack_cycles=cycles,
