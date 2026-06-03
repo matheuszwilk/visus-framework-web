@@ -1,9 +1,8 @@
 """Login RPA — the batteries-included way.
 
-Just the automation. visus.web launches the browser, records the run, writes the
-HTML report (even if a step fails), and prints a summary — all automatically.
-(Pass open_report=True to also pop the report open.) Compare with
-examples/login_rpa.py, which wires all of that by hand.
+visus.web launches the browser, records the run, writes the HTML report (even on
+failure), and prints a summary — all automatically. This logs into the public
+practice site and shows off the "paste a DevTools element" locator.
 
 Run: uv run python examples/login.py   (change ENGINE for edge/firefox)
 """
@@ -14,28 +13,15 @@ ENGINE = "chrome"  # "chrome" | "edge" | "firefox" | "edge_ie"
 USERNAME = "student"
 PASSWORD = "Password123"
 
-with rpa("practice-login", engine=ENGINE, open_report=True) as page:  # add open_report=True to auto-open the report
+# add open_report=True to pop the HTML report open at the end
+with rpa("practice-login", engine=ENGINE) as page:
     page.goto("https://practicetestautomation.com/practice-test-login/")
-    expect(page.get_by_role("heading", name="Test login")).to_be_visible()
 
-                # 2) preencher credenciais — CSS e XPath
-    page.locator('<input type="text" name="username" id="username">').fill(USERNAME)  # locator por CSS
-    page.locator('<input type="password" name="password" id="password">').fill(PASSWORD)  # locator por XPath
-
-    # 3) enviar — locator semântico por role
-    page.get_by_role('<button id="submit" class="btn">Submit</button>').click()
-
-    # 4) validar login: expect() com auto-retry atravessa a navegação real
-    expect(page.get_by_role("heading", name="Logged In Successfully")).to_be_visible()
-    assert "logged-in-successfully" in page.url
-    print("login OK:", page.get_by_text("Congratulations").first().text_content())
-
-    # 5) logout — locator semântico por role(link)
-    page.get_by_role("link", name="Log out").click()
-    expect(page.get_by_role("button", name="Submit")).to_be_visible()
-
-    # 6) caso negativo: senha inválida -> mensagem de erro (expect em texto exato)
+    # paste-an-element locators — copied straight from DevTools ("Copy element")
     page.locator('<input type="text" name="username" id="username">').fill(USERNAME)
-    page.locator('<input type="password" name="password" id="password">').fill("SenhaErrada")
-    page.get_by_role('<button id="submit" class="btn">Submit</button>', name="Submits").click(backtrack=2, timeout=100)
-    expect(page.locator('#error')).to_have_text("Your password is invalid!")
+    page.locator('<input type="password" name="password" id="password">').fill(PASSWORD)
+    page.locator('<button id="submit" class="btn">Submit</button>').click()
+
+    # verify the login worked (expect auto-retries through the real navigation)
+    expect(page.get_by_role("heading", name="Logged In Successfully")).to_be_visible()
+    print("login OK:", page.get_by_text("Congratulations").first().text_content())
