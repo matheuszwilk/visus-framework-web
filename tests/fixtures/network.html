@@ -1,0 +1,13 @@
+<!doctype html>
+<html>
+<head><title>net</title></head>
+<body>
+<div id="r">pending</div>
+<script>
+  var r = document.getElementById('r');
+  fetch('/forms.html')
+    .then(function() { r.textContent = 'loaded'; })
+    .catch(function() { r.textContent = 'blocked'; });
+</script>
+</body>
+</html>

@@ -697,6 +697,45 @@ class SeleniumPageDelegate:
         self._activate()
         ActionChains(self._driver).send_keys(text).perform()
 
+    # ------------------------------------------------------------------
+    # Network controls (Chromium CDP — documented as Chromium-only)
+    # ------------------------------------------------------------------
+
+    def _cdp(self, cmd: str, params: dict) -> object:  # type: ignore[type-arg]
+        """Execute a CDP command; raise VisusWebError on non-Chromium or failures."""
+        self._activate()
+        try:
+            return cast(object, self._driver.execute_cdp_cmd(cmd, params))
+        except AttributeError as exc:
+            raise errors.VisusWebError(
+                f"{cmd} requires a Chromium engine (chrome/edge)"
+            ) from exc
+        except WebDriverException as exc:
+            raise translate_exc(exc) from exc
+
+    def block_urls(self, patterns: list[str]) -> None:
+        """Block network requests matching *patterns* (Chromium only)."""
+        self._cdp("Network.enable", {})
+        self._cdp("Network.setBlockedURLs", {"urls": patterns})
+
+    def set_extra_http_headers(self, headers: dict[str, str]) -> None:
+        """Attach extra HTTP request headers to every request (Chromium only)."""
+        self._cdp("Network.enable", {})
+        self._cdp("Network.setExtraHTTPHeaders", {"headers": headers})
+
+    def set_offline(self, offline: bool) -> None:
+        """Toggle offline mode via CDP network conditions (Chromium only)."""
+        self._cdp("Network.enable", {})
+        self._cdp(
+            "Network.emulateNetworkConditions",
+            {
+                "offline": offline,
+                "latency": 0,
+                "downloadThroughput": -1,
+                "uploadThroughput": -1,
+            },
+        )
+
 
 class SeleniumContextDelegate:
     """Delegates one BrowserContext. If owns_driver=True it manages its own WebDriver process."""

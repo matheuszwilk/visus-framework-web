@@ -158,6 +158,20 @@ class Page:
         )
         holder._set(Dialog(message=msg, type=typ))
 
+    # --- network controls (Chromium CDP) ---
+
+    def block_urls(self, patterns: list[str]) -> None:
+        """Block network requests matching *patterns* (Chromium only, via CDP)."""
+        self._delegate.block_urls(patterns)
+
+    def set_extra_http_headers(self, headers: dict[str, str]) -> None:
+        """Attach extra HTTP request headers to every request (Chromium only, via CDP)."""
+        self._delegate.set_extra_http_headers(headers)
+
+    def set_offline(self, offline: bool) -> None:
+        """Toggle offline mode (Chromium only, via CDP). Restores with ``set_offline(False)``."""
+        self._delegate.set_offline(offline)
+
     @contextmanager
     def expect_download(self, *, timeout: int | None = None) -> Generator[_ValueHolder, None, None]:
         """Context manager that waits for a file download to complete and captures it."""
