@@ -133,6 +133,17 @@ header.hero .run-meta {
   padding: 4px 12px;
   border-radius: 9999px;
 }
+.badge-backtrack {
+  display: inline-block;
+  background: var(--surface-cream-strong);
+  color: var(--primary-active);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 12px;
+  border-radius: 9999px;
+  margin-top: 8px;
+  white-space: nowrap;
+}
 section.kpis {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -462,7 +473,7 @@ def _render_html(events: list[dict[str, Any]], screenshots: dict[str, bytes]) ->
 <body>
   <header class="hero">
     <h1>visus.web run report</h1>
-    <p class="lede">A timeline of every action, with durations, backtrack cycles and failure
+    <p class="lede">A timeline of every action, with durations, backtrack steps and failure
        screenshots embedded inline.</p>
     <div class="run-meta">
       <span class="badge-pill">{run_label}</span>
@@ -556,8 +567,14 @@ def _render_task(event: dict[str, Any], screenshots: dict[str, bytes], number: i
         ("duration", f"{int(event.get('duration_ms') or 0)} ms"),
     ]
     backtrack_steps = int(event.get("backtrack_steps") or 0)
+    backtrack_badge = ""
     if backtrack_steps > 0:
-        rows.append(("backtrack_steps", str(backtrack_steps)))
+        verb = "recovered after replaying" if success else "backtracked (tried)"
+        rows.append(("backtrack", f"{verb} {backtrack_steps} previous step(s)"))
+        backtrack_badge = (
+            f'<span class="badge-backtrack" title="re-ran {backtrack_steps} previous '
+            f'step(s) before retrying">↻ backtrack ×{backtrack_steps}</span>'
+        )
     if role:
         rows.append(("role", str(role)))
     if name:
@@ -600,7 +617,7 @@ def _render_task(event: dict[str, Any], screenshots: dict[str, bytes], number: i
           {aria_block}
           {shot_block}
         </div>
-        <div class="status">{badge}</div>
+        <div class="status">{badge}{backtrack_badge}</div>
       </article>"""
 
 

@@ -120,4 +120,8 @@ def run_action(
         retry += 1
         if monotonic() > deadline:
             break
-    raise errors.VisusTimeoutError(f"{name!r} action timed out after {timeout_ms}ms: {last_reason}")
+    from visus.web.backends.selenium._diagnostics import build_action_error
+
+    raise errors.VisusTimeoutError(
+        build_action_error(driver, selector, name, timeout_ms, last_reason)
+    )

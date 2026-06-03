@@ -47,9 +47,7 @@ def test_record_zip_and_report(browser, base_url, tmp_path):
         assert line.startswith("["), f"malformed log line: {line!r}"
 
     # --- Slice 2: ARIA snapshot on failure ---
-    assert "aria_snapshot" in fail[0], (
-        "expected aria_snapshot key in the failed action event"
-    )
+    assert "aria_snapshot" in fail[0], "expected aria_snapshot key in the failed action event"
     assert isinstance(fail[0]["aria_snapshot"], list), (
         f"aria_snapshot should be a list, got {type(fail[0]['aria_snapshot'])}"
     )
@@ -69,6 +67,44 @@ def test_record_zip_and_report(browser, base_url, tmp_path):
     assert "<details" in html, "expected collapsible <details> blocks for logs"
     # The ✷ character or its HTML entity should be in the footer wordmark
     assert "visus.web" in html
+
+
+@pytest.mark.browser
+def test_backtrack_steps_recorded_under_tracing(browser, base_url, tmp_path):
+    """The traced path records a real depth-3 recovery.
+
+    Covers the only code path that writes backtrack_steps (_run_traced): the #go
+    click recovers via a depth-3 backtrack, so its event must have success=True and
+    backtrack_steps==3. Also locks the rename: the old key must be absent and the
+    report must say 'Backtrack steps' (not 'backtrack cycles').
+    """
+    zip_path = tmp_path / "backtrack.zip"
+    with tracing.record(str(zip_path)):
+        page = browser.new_page()
+        page.goto(f"{base_url}/backtrack_depth.html")
+        page.locator("#s1").click()  # recorded steps build the history
+        page.locator("#s2").click()
+        page.locator("#s3").click()
+        page.locator("#go").click(backtrack=3, timeout=800)  # recovers via depth-3 replay
+
+    z = zipfile.ZipFile(str(zip_path))
+    events = [
+        json.loads(line) for line in z.read("events.jsonl").decode().splitlines() if line.strip()
+    ]
+    recovered = [e for e in events if int(e.get("backtrack_steps") or 0) == 3]
+    assert recovered, (
+        "expected an event with backtrack_steps==3, got "
+        f"{[(e['action'], e.get('backtrack_steps')) for e in events]}"
+    )
+    assert recovered[0]["action"] == "click" and recovered[0]["success"]
+    assert all("backtrack_cycles" not in e for e in events), "old key must be gone"
+
+    html_path = tmp_path / "report.html"
+    tracing.render_report(str(zip_path), str(html_path))
+    html = html_path.read_text(encoding="utf-8")
+    assert "Backtrack steps" in html
+    assert "backtrack cycles" not in html.lower()  # stale prose removed
+    assert "badge-backtrack" in html  # the per-action backtrack badge is rendered
 
 
 @pytest.mark.browser
@@ -102,9 +138,7 @@ def test_logs_non_empty_for_successful_action(browser, base_url, tmp_path):
 
     z = zipfile.ZipFile(str(zip_path))
     events = [
-        json.loads(line)
-        for line in z.read("events.jsonl").decode().splitlines()
-        if line.strip()
+        json.loads(line) for line in z.read("events.jsonl").decode().splitlines() if line.strip()
     ]
     fill_events = [e for e in events if e["action"] == "fill" and e["success"]]
     assert fill_events, "expected a successful fill event"
@@ -129,9 +163,7 @@ def test_aria_snapshot_on_failure(browser, base_url, tmp_path):
 
     z = zipfile.ZipFile(str(zip_path))
     events = [
-        json.loads(line)
-        for line in z.read("events.jsonl").decode().splitlines()
-        if line.strip()
+        json.loads(line) for line in z.read("events.jsonl").decode().splitlines() if line.strip()
     ]
     failed = [e for e in events if not e["success"]]
     assert failed, "expected at least one failed event"

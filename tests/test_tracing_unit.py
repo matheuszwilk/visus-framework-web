@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import zipfile
 
+import pytest
+
 from visus.web import tracing
 from visus.web.tracing import _env_on
 
@@ -151,3 +153,33 @@ def test_render_report_produces_html_from_empty_zip(tmp_path):
     html = (tmp_path / "report.html").read_text(encoding="utf-8")
     assert "visus.web run report" in html
     assert "actions" in html.lower()
+
+
+# ---------------------------------------------------------------------------
+# record(report=...) — auto-render the HTML report on exit, even on failure
+# ---------------------------------------------------------------------------
+
+
+def test_record_report_param_renders_on_success(tmp_path):
+    _reset()
+    zip_path = str(tmp_path / "run.zip")
+    report_path = tmp_path / "report.html"
+    with tracing.record(zip_path, report=str(report_path)):
+        pass
+    assert report_path.exists()
+    assert "visus.web run report" in report_path.read_text(encoding="utf-8")
+    _reset()
+
+
+def test_record_report_param_renders_even_when_body_raises(tmp_path):
+    _reset()
+    zip_path = tmp_path / "run.zip"
+    report_path = tmp_path / "report.html"
+    # the body raises, yet both the zip AND the report are written before it propagates
+    with pytest.raises(RuntimeError):
+        with tracing.record(str(zip_path), report=str(report_path)):
+            raise RuntimeError("rpa blew up")
+    assert zip_path.exists()
+    assert report_path.exists()
+    assert "visus.web run report" in report_path.read_text(encoding="utf-8")
+    _reset()

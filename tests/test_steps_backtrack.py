@@ -127,24 +127,32 @@ def test_depth_two_replays_only_last_two_steps() -> None:
 
 
 def test_backtrack_retries_only_once_no_loop() -> None:
-    """The failed step is retried EXACTLY once: prev replays once, then the error raises.
+    """Depth replay then EXACTLY one retry — never a retry loop.
 
-    This is the key difference from a retry loop — backtrack is depth, not cycles.
+    With a 3-step history and backtrack=3 on an always-failing action: the three
+    previous steps each replay exactly once, the action runs exactly twice
+    (one initial attempt + one retry), then the error propagates. This is the key
+    difference from the old retry-loop ("cycles") behaviour, which would have run
+    the action 4 times and replayed steps repeatedly.
     """
     d = _delegate()
-    prev_calls = {"n": 0}
-
-    def prev() -> None:
-        prev_calls["n"] += 1
-
-    d._step_history = [prev]  # type: ignore[attr-defined]
+    replays = {"s1": 0, "s2": 0, "s3": 0}
+    d._step_history = [  # type: ignore[attr-defined]
+        lambda: replays.__setitem__("s1", replays["s1"] + 1),
+        lambda: replays.__setitem__("s2", replays["s2"] + 1),
+        lambda: replays.__setitem__("s3", replays["s3"] + 1),
+    ]
+    action_calls = {"n": 0}
 
     def action() -> None:
+        action_calls["n"] += 1
         raise errors.VisusTimeoutError("always fails")
 
     with pytest.raises(errors.VisusTimeoutError):
-        run_step(d, action, backtrack=3)  # depth 3, but only 1 step in history
-    assert prev_calls["n"] == 1  # replayed once, NOT three times
+        run_step(d, action, backtrack=3)
+
+    assert action_calls["n"] == 2  # one initial attempt + exactly one retry (no loop)
+    assert replays == {"s1": 1, "s2": 1, "s3": 1}  # each prior step replayed exactly once
 
 
 def test_no_backtrack_raises_immediately() -> None:
@@ -168,3 +176,47 @@ def test_backtrack_with_no_history_raises() -> None:
 
     with pytest.raises(errors.VisusTimeoutError):
         run_step(d, action, backtrack=True)
+
+
+def test_failed_backtrack_still_records_steps_under_tracing(tmp_path) -> None:
+    """A backtrack that fails is still recorded: the traced event shows how many
+    steps it replayed, so 'it failed and retried' is visible in the report."""
+    import json
+    import zipfile
+
+    from visus.web import tracing
+
+    d = _delegate()
+    d._step_history = [lambda: None, lambda: None, lambda: None]  # type: ignore[attr-defined]
+
+    def action() -> None:
+        raise errors.VisusTimeoutError("never works")
+
+    zip_path = tmp_path / "run.zip"
+    with pytest.raises(errors.VisusTimeoutError):
+        with tracing.record(str(zip_path)):
+            run_step(d, action, backtrack=3, action_name="click", selector="sel")
+
+    z = zipfile.ZipFile(str(zip_path))
+    events = [json.loads(x) for x in z.read("events.jsonl").decode().splitlines() if x.strip()]
+    assert events, "expected a recorded event"
+    failed = events[-1]
+    assert failed["success"] is False
+    assert failed["backtrack_steps"] == 3  # backtrack tried 3 steps even though it failed
+
+
+def test_backtrack_records_depth_even_when_a_replay_fails() -> None:
+    """If a replayed step itself fails (the page moved on), the attempted depth is still tagged."""
+    d = _delegate()
+
+    def bad_replay() -> None:
+        raise errors.VisusTimeoutError("this step no longer exists on the page")
+
+    d._step_history = [bad_replay, lambda: None, lambda: None]  # type: ignore[attr-defined]
+
+    def action() -> None:
+        raise errors.VisusTimeoutError("original failure")
+
+    with pytest.raises(errors.VisusTimeoutError) as exc:
+        run_step(d, action, backtrack=3)
+    assert getattr(exc.value, "backtrack_steps", None) == 3  # depth-3 backtrack was attempted

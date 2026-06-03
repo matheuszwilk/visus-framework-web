@@ -65,12 +65,23 @@ def _execute(delegate: object, action: Callable[[], None], depth: int) -> int:
         replay = history[-depth:] if depth > 0 else []
         if not replay:
             raise  # backtrack disabled, or no previous step to return to
-        _log.info("backtrack: replaying %d previous step(s) before retry", len(replay))
-        for step in replay:
-            step()  # re-run the previous step(s); a replay failure propagates
-        action()  # retry the failed step ONCE — propagate if it still fails
+        attempted = len(replay)
+        _log.info("backtrack: replaying %d previous step(s) before retry", attempted)
+        in_replay = True
+        try:
+            for step in replay:
+                step()  # re-run the previous step(s)
+            in_replay = False
+            action()  # then retry the failed step ONCE
+        except errors.VisusWebError as exc:
+            # A depth-N backtrack was attempted; tag it so the traced report records
+            # the backtrack even when a replayed step (or the retry) ultimately fails.
+            exc.backtrack_steps = attempted  # type: ignore[attr-defined]
+            if in_replay:
+                _log.warning("backtrack: a replayed step failed — the page may have moved on")
+            raise
         _record_step(delegate, action)
-        return len(replay)
+        return attempted
     _record_step(delegate, action)
     return 0
 
@@ -148,6 +159,7 @@ def _run_traced(
         success = True
     except errors.VisusWebError as exc:
         error = str(exc)
+        steps_replayed = getattr(exc, "backtrack_steps", 0)  # backtrack tried but failed
         raise
     finally:
         duration_ms = int((time.monotonic() - start) * 1000)
