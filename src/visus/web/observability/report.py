@@ -385,19 +385,19 @@ def _kpis(events: Iterable[dict[str, Any]]) -> dict[str, Any]:
             "total_duration_ms": 0,
             "failed": 0,
             "distinct_pages": 0,
-            "backtrack_cycles": 0,
+            "backtrack_steps": 0,
         }
     succeeded = sum(1 for e in events_list if e.get("success"))
     total_duration = sum(int(e.get("duration_ms") or 0) for e in events_list)
     distinct_pages = len({e.get("url") for e in events_list if e.get("url")})
-    total_backtracks = sum(int(e.get("backtrack_cycles") or 0) for e in events_list)
+    total_backtracks = sum(int(e.get("backtrack_steps") or 0) for e in events_list)
     return {
         "total": total,
         "success_rate_pct": round(succeeded / total * 100),
         "total_duration_ms": total_duration,
         "failed": total - succeeded,
         "distinct_pages": distinct_pages,
-        "backtrack_cycles": total_backtracks,
+        "backtrack_steps": total_backtracks,
     }
 
 
@@ -421,9 +421,7 @@ def _group_runs(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return runs
 
 
-def _render_html(
-    events: list[dict[str, Any]], screenshots: dict[str, bytes]
-) -> str:
+def _render_html(events: list[dict[str, Any]], screenshots: dict[str, bytes]) -> str:
     kpis = _kpis(events)
     runs = _group_runs(events)
     last_ts = events[-1]["timestamp"] if events else ""
@@ -433,14 +431,13 @@ def _render_html(
         sections = []
         for run in runs:
             tasks_html = "\n".join(
-                _render_task(e, screenshots, n + 1)
-                for n, e in enumerate(run["events"])
+                _render_task(e, screenshots, n + 1) for n, e in enumerate(run["events"])
             )
             failed = run["total"] - run["ok"]
             status = (
-                f'{run["ok"]}/{run["total"]} ok'
+                f"{run['ok']}/{run['total']} ok"
                 if not failed
-                else f'{run["ok"]}/{run["total"]} ok &middot; {failed} failed'
+                else f"{run['ok']}/{run['total']} ok &middot; {failed} failed"
             )
             sections.append(
                 f'<div class="run-header"><h3>Run {escape(run["run_id"])}</h3>'
@@ -478,27 +475,27 @@ def _render_html(
     <section class="kpis" aria-label="Run summary">
       <div class="kpi-card">
         <div class="label">Total actions</div>
-        <div class="value">{kpis['total']}</div>
+        <div class="value">{kpis["total"]}</div>
       </div>
       <div class="kpi-card">
         <div class="label">Success rate</div>
-        <div class="value">{kpis['success_rate_pct']}%</div>
+        <div class="value">{kpis["success_rate_pct"]}%</div>
       </div>
       <div class="kpi-card">
         <div class="label">Total duration</div>
-        <div class="value">{kpis['total_duration_ms']} ms</div>
+        <div class="value">{kpis["total_duration_ms"]} ms</div>
       </div>
       <div class="kpi-card">
         <div class="label">Failures</div>
-        <div class="value">{kpis['failed']}</div>
+        <div class="value">{kpis["failed"]}</div>
       </div>
       <div class="kpi-card">
         <div class="label">Distinct pages</div>
-        <div class="value">{kpis['distinct_pages']}</div>
+        <div class="value">{kpis["distinct_pages"]}</div>
       </div>
       <div class="kpi-card">
-        <div class="label">Backtrack cycles</div>
-        <div class="value">{kpis['backtrack_cycles']}</div>
+        <div class="label">Backtrack steps</div>
+        <div class="value">{kpis["backtrack_steps"]}</div>
       </div>
     </section>
 
@@ -519,9 +516,7 @@ def _render_html(
 """
 
 
-def _render_task(
-    event: dict[str, Any], screenshots: dict[str, bytes], number: int
-) -> str:
+def _render_task(event: dict[str, Any], screenshots: dict[str, bytes], number: int) -> str:
     success = bool(event.get("success"))
     badge = (
         '<span class="badge-success">SUCCESS</span>'
@@ -539,7 +534,7 @@ def _render_task(
 
     # Prefer role=X name="Y" when role present, else selector, else url for goto
     if role:
-        target_display = f'role={escape(str(role))} name=&quot;{escape(str(name))}&quot;'
+        target_display = f"role={escape(str(role))} name=&quot;{escape(str(name))}&quot;"
     elif selector:
         target_display = escape(str(selector))
     elif target_val:
@@ -554,19 +549,15 @@ def _render_task(
         title_html += f"<code>{target_display}</code>"
 
     error = event.get("error")
-    error_block = (
-        f'<pre class="error">{escape(str(error))}</pre>'
-        if error
-        else ""
-    )
+    error_block = f'<pre class="error">{escape(str(error))}</pre>' if error else ""
 
     # Detail rows
     rows: list[tuple[str, str]] = [
         ("duration", f"{int(event.get('duration_ms') or 0)} ms"),
     ]
-    backtrack_cycles = int(event.get("backtrack_cycles") or 0)
-    if backtrack_cycles > 0:
-        rows.append(("backtrack_cycles", str(backtrack_cycles)))
+    backtrack_steps = int(event.get("backtrack_steps") or 0)
+    if backtrack_steps > 0:
+        rows.append(("backtrack_steps", str(backtrack_steps)))
     if role:
         rows.append(("role", str(role)))
     if name:
@@ -628,9 +619,7 @@ def _render_logs(lines: list[str]) -> str:
         if line.startswith("[") and "]" in line:
             level = line[1 : line.index("]")] or "INFO"
         safe_class = "".join(c for c in level if c.isalnum()).upper() or "INFO"
-        rendered.append(
-            f'<span class="lvl-{safe_class}">{escape(line)}</span>'
-        )
+        rendered.append(f'<span class="lvl-{safe_class}">{escape(line)}</span>')
     body = "\n".join(rendered)
     return (
         f'<details class="logs">'
@@ -664,9 +653,7 @@ def _short_time(iso_ts: str) -> str:
     return iso_ts
 
 
-def _render_screenshot(
-    shot_path: str, screenshots: dict[str, bytes], kind: str = "failure"
-) -> str:
+def _render_screenshot(shot_path: str, screenshots: dict[str, bytes], kind: str = "failure") -> str:
     basename = os.path.basename(shot_path)
     data = screenshots.get(basename)
     if data is None:

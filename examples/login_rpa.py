@@ -47,7 +47,9 @@ def main() -> None:
 
             # 3) enviar — locator semântico por role (+ backtrack nativo: re-executa o
             #    passo anterior e tenta de novo caso o clique falhe)
-            page.get_by_role("button", name="Submit").click()  # backtrack=1 implícito: re-tenta o click se a navegação falhar
+            page.get_by_role(
+                "button", name="Submit"
+            ).click()  # backtrack=1 implícito: re-tenta o click se a navegação falhar
 
             # 4) validar login: expect() com auto-retry atravessa a navegação real
             expect(page.get_by_role("heading", name="Logged In Successfully")).to_be_visible()
@@ -68,7 +70,7 @@ def main() -> None:
             # 7) caso negativo: senha inválida -> mensagem de erro (expect em texto exato)
             page.locator("css=#username").fill(USERNAME)
             page.locator("css=#password").fill("SenhaErrada")
-            page.get_by_role("button", name="Submit").click()
+            page.get_by_role("button", name="Submits").click(backtrack=2)
             expect(page.locator("#error")).to_have_text("Your password is invalid!")
 
     # ---- render the HTML report ----
@@ -96,7 +98,7 @@ def main() -> None:
     print(f"actions recorded : {len(events)}")
     print(f"failures         : {manifest['counts']['failures']}")
     print(f"screenshots      : {len(shots)}")
-    print(f"backtrack cycles : {sum(e['backtrack_cycles'] for e in events)}")
+    print(f"backtrack steps  : {sum(e['backtrack_steps'] for e in events)}")
     print(
         "actions:",
         ", ".join(f"{e['action']}{'' if e['success'] else '(FAILED)'}" for e in events),

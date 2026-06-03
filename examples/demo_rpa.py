@@ -83,13 +83,15 @@ def main() -> None:
             page.goto(f"{base}/demo.html")
             expect(page.get_by_role("heading", name="Cadastro Visus")).to_be_visible()
 
-            page.get_by_label("Nome").fill("Ada Lovelace")          # locator semantico (label)
-            page.locator("css=#email").fill("ada@visus.dev")        # locator por CSS
-            page.locator("//input[@id='termos']").check()           # locator por XPath
+            page.get_by_label("Nome").fill("Ada Lovelace")  # locator semantico (label)
+            page.locator("css=#email").fill("ada@visus.dev")  # locator por CSS
+            page.locator("//input[@id='termos']").check()  # locator por XPath
             page.get_by_label("Plano").select_option(label="Free")
 
             page.get_by_role("button", name="Carregar dados").click()
-            expect(page.get_by_text("Dados carregados")).to_be_visible()  # auto-retry (appears @800ms)
+            expect(
+                page.get_by_text("Dados carregados")
+            ).to_be_visible()  # auto-retry (appears @800ms)
 
             # inside the iframe
             page.frame_locator("#painel").get_by_role("button", name="Confirmar").click()
@@ -104,7 +106,7 @@ def main() -> None:
             except errors.VisusWebError:
                 pass
 
-            page.locator("//button[@id='enviar']").click()         # locator por XPath
+            page.locator("//button[@id='enviar']").click()  # locator por XPath
 
     # ---- render the HTML report ----
     report_html = work / "report.html"
@@ -123,7 +125,11 @@ def main() -> None:
     with zipfile.ZipFile(str(zip_path)) as z:
         import json
 
-        events = [json.loads(line) for line in z.read("events.jsonl").decode().splitlines() if line.strip()]
+        events = [
+            json.loads(line)
+            for line in z.read("events.jsonl").decode().splitlines()
+            if line.strip()
+        ]
         shots = [n for n in z.namelist() if n.startswith("screenshots/")]
         manifest = json.loads(z.read("manifest.json"))
 
@@ -131,8 +137,10 @@ def main() -> None:
     print(f"actions recorded : {len(events)}")
     print(f"failures         : {manifest['counts']['failures']}")
     print(f"screenshots      : {len(shots)}")
-    print(f"backtrack cycles : {sum(e['backtrack_cycles'] for e in events)}")
-    print("actions:", ", ".join(f"{e['action']}{'' if e['success'] else '(FAILED)'}" for e in events))
+    print(f"backtrack steps  : {sum(e['backtrack_steps'] for e in events)}")
+    print(
+        "actions:", ", ".join(f"{e['action']}{'' if e['success'] else '(FAILED)'}" for e in events)
+    )
     print("ZIP        :", zip_path)
     print("REPORT_HTML:", report_html)
     print("REPORT_PNG :", report_png)

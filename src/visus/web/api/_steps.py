@@ -1,12 +1,25 @@
 """Backtrack helper for visus.web actions.
 
-run_step() executes an action callable and, on VisusWebError, optionally
-re-runs the last recorded successful step before retrying — up to int(backtrack)
-cycles.  On success the action is recorded as the delegate's _last_step.
+run_step() executes an action and, on VisusWebError, optionally *backtracks*: it
+re-runs the last N successful steps (oldest→newest), then retries the failed step
+**once**.  ``backtrack`` is the depth — how many previous steps to replay before
+retrying:
+
+* ``False`` / ``0`` → disabled (the error propagates immediately)
+* ``True``          → replay 1 previous step (the default depth)
+* ``N``             → replay the last ``min(N, 3)`` steps
+
+Example — steps 1, 2, 3, 4 where step 4 fails:
+  ``backtrack=3`` re-runs 1, 2, 3 (in order) then retries 4;
+  ``backtrack=1`` re-runs 3 then retries 4.
+
+Backtrack is **not** a retry loop: the failed step is retried exactly once after
+the replay.  Each delegate carries a rolling history of its last 3 successful
+steps, so this behaves identically for the sync and async (to_thread) APIs.
 
 When tracing is active the step is timed and an event (+ screenshots) is emitted
-via the active Recorder.  With tracing OFF the behaviour is byte-for-byte
-identical to the pre-observability implementation.
+via the active Recorder.  With tracing OFF the behaviour is the same minus the
+recording overhead.
 """
 
 from __future__ import annotations
@@ -18,6 +31,49 @@ from visus.web import errors
 
 _log = logging.getLogger("visus.web")
 
+MAX_BACKTRACK = 3  # how many previous steps the engine remembers and can replay
+
+
+def _coerce_depth(backtrack: bool | int) -> int:
+    """Backtrack depth: False/0 → 0 (off), True → 1, N → min(N, MAX_BACKTRACK)."""
+    return max(0, min(int(backtrack), MAX_BACKTRACK))
+
+
+def _record_step(delegate: object, action: Callable[[], None]) -> None:
+    """Append a successful action to the delegate's rolling step history (last 3)."""
+    history: list[Callable[[], None]] | None = getattr(delegate, "_step_history", None)
+    if history is None:
+        history = []
+        delegate._step_history = history  # type: ignore[attr-defined]
+    history.append(action)
+    del history[:-MAX_BACKTRACK]  # keep only the most recent MAX_BACKTRACK steps
+
+
+def _execute(delegate: object, action: Callable[[], None], depth: int) -> int:
+    """Run ``action`` once; backtrack on failure.
+
+    On :exc:`~visus.web.errors.VisusWebError`, if *depth* > 0, re-run the last
+    *depth* successful steps (oldest→newest) then retry ``action`` exactly once.
+    Returns the number of steps replayed (0 when the action succeeded on the first
+    try).  Records the action as a successful step on success; re-raises if it
+    still fails or if there is nothing to backtrack to.
+    """
+    try:
+        action()
+    except errors.VisusWebError:
+        history: list[Callable[[], None]] = list(getattr(delegate, "_step_history", None) or [])
+        replay = history[-depth:] if depth > 0 else []
+        if not replay:
+            raise  # backtrack disabled, or no previous step to return to
+        _log.info("backtrack: replaying %d previous step(s) before retry", len(replay))
+        for step in replay:
+            step()  # re-run the previous step(s); a replay failure propagates
+        action()  # retry the failed step ONCE — propagate if it still fails
+        _record_step(delegate, action)
+        return len(replay)
+    _record_step(delegate, action)
+    return 0
+
 
 def run_step(
     delegate: object,
@@ -28,14 +84,12 @@ def run_step(
     selector: str | None = None,
     target: str | None = None,
 ) -> None:
-    """Run ``action()``.
+    """Run ``action()`` with optional backtrack recovery.
 
-    On :exc:`~visus.web.errors.VisusWebError`, if *backtrack* is truthy,
-    re-run the previously recorded successful step (``delegate._last_step``) then retry
-    ``action``, up to ``int(backtrack)`` cycles (``True`` → 1 cycle, ``N`` → up to N cycles).
-    If still failing after all cycles, raise the error.
-
-    On success, record ``action`` as the delegate's last successful step.
+    On :exc:`~visus.web.errors.VisusWebError`, if *backtrack* is truthy, re-run
+    the last ``int(backtrack)`` (capped at 3) successful steps then retry
+    ``action`` once.  ``True`` → depth 1.  On success, record ``action`` as the
+    delegate's most recent successful step.
 
     *action_name*, *selector*, and *target* are forwarded to the :class:`Recorder`
     when tracing is active; they are ignored on the fast path.
@@ -57,20 +111,8 @@ def run_step(
 
 
 def _run_plain(delegate: object, action: Callable[[], None], backtrack: bool | int) -> None:
-    """Fast path: unchanged backtrack semantics, zero tracing overhead."""
-    budget = int(backtrack)  # False→0, True→1, N→N
-    while True:
-        try:
-            action()
-            break
-        except errors.VisusWebError:
-            prev: Callable[[], None] | None = getattr(delegate, "_last_step", None)
-            if budget > 0 and prev is not None:
-                budget -= 1
-                prev()  # re-run the previous successful step (may raise → propagate)
-                continue  # retry the action
-            raise
-    delegate._last_step = action  # type: ignore[attr-defined]
+    """Fast path: replay-then-retry backtrack with zero tracing overhead."""
+    _execute(delegate, action, _coerce_depth(backtrack))
 
 
 def _run_traced(
@@ -93,35 +135,24 @@ def _run_traced(
         _run_plain(delegate, action, backtrack)
         return
 
+    depth = _coerce_depth(backtrack)
     start = time.monotonic()
     start_ts = time.time()
-    budget = int(backtrack)
-    cycles = 0
+    steps_replayed = 0
     error: str | None = None
     success = False
     label = target or selector or ""
     _log.info("%s → %s", action_name, label)
     try:
-        while True:
-            try:
-                action()
-                success = True
-                break
-            except errors.VisusWebError as exc:
-                prev: Callable[[], None] | None = getattr(delegate, "_last_step", None)
-                if budget > 0 and prev is not None:
-                    budget -= 1
-                    cycles += 1
-                    _log.info("backtrack: re-running previous step (cycle %d)", cycles)
-                    prev()
-                    continue
-                error = str(exc)
-                raise
-        delegate._last_step = action  # type: ignore[attr-defined]
+        steps_replayed = _execute(delegate, action, depth)
+        success = True
+    except errors.VisusWebError as exc:
+        error = str(exc)
+        raise
     finally:
         duration_ms = int((time.monotonic() - start) * 1000)
         if success:
-            _log.info("%s ✓ (%dms, %d backtrack)", action_name, duration_ms, cycles)
+            _log.info("%s ✓ (%dms, back %d step(s))", action_name, duration_ms, steps_replayed)
         else:
             _log.warning("%s ✗ %s", action_name, error or "")
         rec.record_action(
@@ -134,5 +165,5 @@ def _run_traced(
             duration_ms=duration_ms,
             success=success,
             error=error,
-            backtrack_cycles=cycles,
+            backtrack_steps=steps_replayed,
         )

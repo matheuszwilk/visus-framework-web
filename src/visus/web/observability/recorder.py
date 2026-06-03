@@ -52,12 +52,14 @@ class _LogTailHandler(logging.Handler):
         if any(name == p or name.startswith(p + ".") for p in _NOISY_LOG_PREFIXES):
             return
         try:
-            self.records.append((
-                record.created,
-                record.levelname,
-                name,
-                record.getMessage(),
-            ))
+            self.records.append(
+                (
+                    record.created,
+                    record.levelname,
+                    name,
+                    record.getMessage(),
+                )
+            )
         except Exception:  # pragma: no cover - defensive
             pass
 
@@ -101,7 +103,7 @@ class Recorder:
         duration_ms: int,
         success: bool,
         error: str | None,
-        backtrack_cycles: int,
+        backtrack_steps: int,
     ) -> None:
         self._step += 1
         step_id = self._step
@@ -138,7 +140,7 @@ class Recorder:
             "title": meta.get("title"),
             "bbox": meta.get("bbox"),
             "duration_ms": duration_ms,
-            "backtrack_cycles": backtrack_cycles,
+            "backtrack_steps": backtrack_steps,
             "success": success,
             "error": error,
             "screenshot": shot_ref,

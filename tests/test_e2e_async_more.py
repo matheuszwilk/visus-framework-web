@@ -479,7 +479,7 @@ async def test_async_backtrack_reexecutes_previous_step(base_url: str) -> None:
         page = await browser.new_page()
         await page.goto(f"{base_url}/backtrack.html")
 
-        # Step A: click Prepare (count=1, recorded as _last_step on delegate)
+        # Step A: click Prepare (count=1, recorded in the delegate's step history)
         await page.get_by_role("button", name="Prepare").click()
 
         # #t2 needs count>=2; first attempt fails -> backtrack re-runs Prepare
@@ -487,6 +487,28 @@ async def test_async_backtrack_reexecutes_previous_step(base_url: str) -> None:
         await page.locator("#t2").click(backtrack=True, timeout=800)
 
         assert await page.locator("#r2").text_content() == "clicked"
+
+
+@pytest.mark.browser
+async def test_async_backtrack_depth(base_url: str) -> None:
+    """Async backtrack depth 3: replays the 3 previous steps then retries the click.
+
+    Proves the depth behaviour is identical through the async (to_thread) facade.
+    """
+    async with await launch(headless=True) as browser:
+        page = await browser.new_page()
+        await page.goto(f"{base_url}/backtrack_depth.html")
+
+        await page.locator("#s1").click()  # step 1: count=1
+        await page.locator("#s2").click()  # step 2: count=2
+        await page.locator("#s3").click()  # step 3: count=3
+
+        # #go needs count>=6; backtrack=3 replays s1,s2,s3 (count→6) then retries once
+        await page.locator("#go").click(backtrack=3, timeout=800)
+
+        assert await page.locator("#r").text_content() == "clicked"
+        log = await page.locator("#log").text_content() or ""
+        assert log.split() == ["s1", "s2", "s3", "s1", "s2", "s3"]
 
 
 # ---------------------------------------------------------------------------

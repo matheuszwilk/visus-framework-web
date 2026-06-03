@@ -1,0 +1,21 @@
+<!doctype html><html><head><meta charset="utf-8"><title>backtrack-depth</title></head><body>
+<button id="s1" onclick="bump('s1')">S1</button>
+<button id="s2" onclick="bump('s2')">S2</button>
+<button id="s3" onclick="bump('s3')">S3</button>
+<div id="log"></div>
+<div id="r"></div>
+<script>
+window.n = 0;
+function bump(id){
+  window.n++;
+  document.getElementById('log').textContent += id + ' ';
+  // the target button #go only appears once 6 step-runs have happened, so reaching
+  // it from count=3 requires replaying all three previous steps (backtrack depth 3).
+  if(window.n >= 6 && !document.getElementById('go')){
+    var b = document.createElement('button');
+    b.id = 'go'; b.textContent = 'go';
+    b.onclick = function(){ document.getElementById('r').textContent = 'clicked'; };
+    document.body.appendChild(b);
+  }
+}
+</script></body></html>
