@@ -102,6 +102,8 @@ class Locator:
                 self._encoded, timeout_ms=self._t(timeout), force=force
             ),
             backtrack,
+            action_name="click",
+            selector=self._encoded,
         )
 
     def fill(
@@ -118,6 +120,8 @@ class Locator:
                 self._encoded, value, timeout_ms=self._t(timeout), force=force
             ),
             backtrack,
+            action_name="fill",
+            selector=self._encoded,
         )
 
     def hover(
@@ -129,6 +133,8 @@ class Locator:
                 self._encoded, timeout_ms=self._t(timeout), force=force
             ),
             backtrack,
+            action_name="hover",
+            selector=self._encoded,
         )
 
     def dblclick(
@@ -140,6 +146,8 @@ class Locator:
                 self._encoded, timeout_ms=self._t(timeout), force=force
             ),
             backtrack,
+            action_name="dblclick",
+            selector=self._encoded,
         )
 
     def check(
@@ -151,6 +159,8 @@ class Locator:
                 self._encoded, True, timeout_ms=self._t(timeout), force=force
             ),
             backtrack,
+            action_name="check",
+            selector=self._encoded,
         )
 
     def uncheck(
@@ -162,6 +172,8 @@ class Locator:
                 self._encoded, False, timeout_ms=self._t(timeout), force=force
             ),
             backtrack,
+            action_name="uncheck",
+            selector=self._encoded,
         )
 
     def set_checked(
@@ -178,6 +190,8 @@ class Locator:
                 self._encoded, checked, timeout_ms=self._t(timeout), force=force
             ),
             backtrack,
+            action_name="set_checked",
+            selector=self._encoded,
         )
 
     def select_option(
@@ -195,6 +209,8 @@ class Locator:
                 self._encoded, value=value, label=label, index=index, timeout_ms=self._t(timeout)
             ),
             backtrack,
+            action_name="select_option",
+            selector=self._encoded,
         )
 
     def press(self, key: str, *, timeout: int | None = None, backtrack: bool | int = False) -> None:
@@ -202,6 +218,8 @@ class Locator:
             self._delegate,
             lambda: self._delegate.locator_press(self._encoded, key, timeout_ms=self._t(timeout)),
             backtrack,
+            action_name="press",
+            selector=self._encoded,
         )
 
     def focus(self, *, timeout: int | None = None, backtrack: bool | int = False) -> None:
@@ -209,6 +227,8 @@ class Locator:
             self._delegate,
             lambda: self._delegate.locator_focus(self._encoded, timeout_ms=self._t(timeout)),
             backtrack,
+            action_name="focus",
+            selector=self._encoded,
         )
 
     def blur(self, *, timeout: int | None = None, backtrack: bool | int = False) -> None:
@@ -216,6 +236,8 @@ class Locator:
             self._delegate,
             lambda: self._delegate.locator_blur(self._encoded, timeout_ms=self._t(timeout)),
             backtrack,
+            action_name="blur",
+            selector=self._encoded,
         )
 
     def clear(
@@ -227,6 +249,8 @@ class Locator:
                 self._encoded, timeout_ms=self._t(timeout), force=force
             ),
             backtrack,
+            action_name="clear",
+            selector=self._encoded,
         )
 
     def drag_to(
@@ -238,6 +262,8 @@ class Locator:
                 self._encoded, target._encoded, timeout_ms=self._t(timeout)
             ),
             backtrack,
+            action_name="drag_to",
+            selector=self._encoded,
         )
 
     def input_value(self) -> str:
@@ -283,6 +309,8 @@ class Locator:
             self._delegate,
             lambda: self._delegate.locator_set_input_files(self._encoded, paths),
             backtrack,
+            action_name="set_input_files",
+            selector=self._encoded,
         )
 
     # --- vision hooks (lazy-import; requires [vision] extra) ---

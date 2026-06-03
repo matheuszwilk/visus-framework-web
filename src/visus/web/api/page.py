@@ -37,6 +37,8 @@ class Page:
                 timeout_ms=timeout if timeout is not None else self._defaults.navigation_timeout_ms,
             ),
             backtrack,
+            action_name="goto",
+            target=url,
         )
 
     @property
