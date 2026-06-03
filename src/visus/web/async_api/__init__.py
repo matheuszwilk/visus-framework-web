@@ -39,9 +39,7 @@ __all__ = [
 # ---------------------------------------------------------------------------
 
 
-async def launch(
-    engine: Engine | str = Engine.CHROME, *, headless: bool = False
-) -> AsyncBrowser:
+async def launch(engine: Engine | str = Engine.CHROME, *, headless: bool = False) -> AsyncBrowser:
     """Launch a browser and return an AsyncBrowser handle.
 
     Usage::
@@ -155,12 +153,8 @@ class AsyncPage:
 
     # --- navigation / async reads ---
 
-    async def goto(
-        self, url: str, *, wait_until: str = "load", timeout: int | None = None
-    ) -> None:
-        await asyncio.to_thread(
-            lambda: self._p.goto(url, wait_until=wait_until, timeout=timeout)
-        )
+    async def goto(self, url: str, *, wait_until: str = "load", timeout: int | None = None) -> None:
+        await asyncio.to_thread(lambda: self._p.goto(url, wait_until=wait_until, timeout=timeout))
 
     async def title(self) -> str:
         return await asyncio.to_thread(self._p.title)
@@ -172,9 +166,7 @@ class AsyncPage:
         return await asyncio.to_thread(lambda: self._p.url)
 
     async def screenshot(self, *, path: str | None = None, full_page: bool = False) -> bytes:
-        return await asyncio.to_thread(
-            lambda: self._p.screenshot(path=path, full_page=full_page)
-        )
+        return await asyncio.to_thread(lambda: self._p.screenshot(path=path, full_page=full_page))
 
     async def evaluate(self, expr: str, arg: object = None) -> object:
         return await asyncio.to_thread(lambda: self._p.evaluate(expr, arg))
@@ -424,9 +416,7 @@ class AsyncLocator:
         timeout: int | None = None,
     ) -> None:
         await asyncio.to_thread(
-            lambda: self._loc.select_option(
-                value=value, label=label, index=index, timeout=timeout
-            )
+            lambda: self._loc.select_option(value=value, label=label, index=index, timeout=timeout)
         )
 
     async def drag_to(self, target: AsyncLocator, *, timeout: int | None = None) -> None:
@@ -482,9 +472,7 @@ class AsyncLocatorAssertions:
     async def to_be_checked(self, *, timeout: int | None = None) -> None:
         await asyncio.to_thread(lambda: self._a.to_be_checked(timeout=timeout))
 
-    async def to_have_text(
-        self, t: str, *, exact: bool = True, timeout: int | None = None
-    ) -> None:
+    async def to_have_text(self, t: str, *, exact: bool = True, timeout: int | None = None) -> None:
         await asyncio.to_thread(lambda: self._a.to_have_text(t, exact=exact, timeout=timeout))
 
     async def to_contain_text(self, t: str, *, timeout: int | None = None) -> None:
@@ -493,9 +481,7 @@ class AsyncLocatorAssertions:
     async def to_have_value(self, v: str, *, timeout: int | None = None) -> None:
         await asyncio.to_thread(lambda: self._a.to_have_value(v, timeout=timeout))
 
-    async def to_have_attribute(
-        self, name: str, value: str, *, timeout: int | None = None
-    ) -> None:
+    async def to_have_attribute(self, name: str, value: str, *, timeout: int | None = None) -> None:
         await asyncio.to_thread(lambda: self._a.to_have_attribute(name, value, timeout=timeout))
 
     async def to_have_class(self, class_name: str, *, timeout: int | None = None) -> None:

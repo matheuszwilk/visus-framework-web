@@ -32,9 +32,7 @@ def _cleanup(driver_ref: weakref.ref[WebDriver], profile_dir: str, download_dir:
     shutil.rmtree(download_dir, ignore_errors=True)
 
 
-def _spawn_driver(
-    config: BrowserConfig, *, headless: bool
-) -> tuple[WebDriver, str, str]:
+def _spawn_driver(config: BrowserConfig, *, headless: bool) -> tuple[WebDriver, str, str]:
     """Create a driver with a fresh temp profile + download dir.
 
     Returns (driver, profile_dir, download_dir).

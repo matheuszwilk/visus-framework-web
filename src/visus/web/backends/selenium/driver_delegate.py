@@ -707,9 +707,7 @@ class SeleniumPageDelegate:
         try:
             return cast(object, self._driver.execute_cdp_cmd(cmd, params))
         except AttributeError as exc:
-            raise errors.VisusWebError(
-                f"{cmd} requires a Chromium engine (chrome/edge)"
-            ) from exc
+            raise errors.VisusWebError(f"{cmd} requires a Chromium engine (chrome/edge)") from exc
         except WebDriverException as exc:
             raise translate_exc(exc) from exc
 

@@ -7,9 +7,7 @@ the async test functions automatically.
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
-
-import pytest
+from unittest.mock import MagicMock, patch
 
 from visus.web.async_api import (
     AsyncBrowser,
@@ -20,7 +18,6 @@ from visus.web.async_api import (
     AsyncPage,
     expect,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -349,7 +346,14 @@ def test_async_page_frame_locator() -> None:
 
 def _make_frame_loc() -> MagicMock:
     m = MagicMock()
-    for name in ("locator", "get_by_role", "get_by_text", "get_by_label", "get_by_test_id", "frame_locator"):
+    for name in (
+        "locator",
+        "get_by_role",
+        "get_by_text",
+        "get_by_label",
+        "get_by_test_id",
+        "frame_locator",
+    ):
         getattr(m, name).return_value = MagicMock()
     return m
 
