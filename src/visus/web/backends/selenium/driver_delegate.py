@@ -699,19 +699,27 @@ class SeleniumPageDelegate:
 
 
 class SeleniumContextDelegate:
-    """S0: a non-isolated grouping over one driver. Real isolation arrives in S4 (BiDi)."""
+    """Delegates one BrowserContext. If owns_driver=True it manages its own WebDriver process."""
 
     def __init__(
         self,
         driver: WebDriver,
         first_handle: str | None = None,
         download_dir: str | None = None,
+        owns_driver: bool = False,
+        profile_dir: str | None = None,
     ) -> None:
         self._driver = driver
         self._download_dir = download_dir
+        self._owns_driver = owns_driver
+        self._profile_dir = profile_dir
         self._pages: list[SeleniumPageDelegate] = []
         if first_handle is not None:
             self._pages.append(SeleniumPageDelegate(driver, first_handle, download_dir))
+
+    @property
+    def owns_driver(self) -> bool:
+        return self._owns_driver
 
     def new_page(self) -> PageDelegate:
         before = set(self._driver.window_handles)
@@ -734,6 +742,17 @@ class SeleniumContextDelegate:
     def close(self) -> None:
         for page in list(self._pages):
             page.close()
+        if self._owns_driver:
+            try:
+                self._driver.quit()
+            except Exception:
+                pass
+            import shutil
+
+            if self._profile_dir:
+                shutil.rmtree(self._profile_dir, ignore_errors=True)
+            if self._download_dir:
+                shutil.rmtree(self._download_dir, ignore_errors=True)
 
     def cookies(self) -> list[dict]:  # type: ignore[type-arg]
         return self._driver.get_cookies()

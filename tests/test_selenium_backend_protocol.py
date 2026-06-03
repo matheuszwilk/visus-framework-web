@@ -1,8 +1,9 @@
 import os
 import tempfile
 
-from visus.web.backends.base import Backend
+from visus.web.backends.base import Backend, BrowserConfig
 from visus.web.backends.selenium_backend import SeleniumBackend, SeleniumBrowserDelegate
+from visus.web.engine import Engine
 
 
 def test_backend_conforms_to_protocol():
@@ -23,11 +24,22 @@ class _FakeDriver:
         self.quit_calls += 1
 
 
+def _fake_config() -> BrowserConfig:
+    return BrowserConfig(
+        engine=Engine.CHROME,
+        options_factory=lambda **k: None,
+        service_factory=lambda: None,
+        driver_factory=lambda **k: _FakeDriver(),
+    )
+
+
 def test_dispose_removes_both_temp_dirs_and_is_idempotent():
     profile_dir = tempfile.mkdtemp(prefix="visus-web-test-")
     download_dir = tempfile.mkdtemp(prefix="visus-dl-test-")
     driver = _FakeDriver()
-    delegate = SeleniumBrowserDelegate(driver, profile_dir, download_dir)
+    delegate = SeleniumBrowserDelegate(
+        driver, profile_dir, download_dir, config=_fake_config(), headless=True
+    )
 
     assert os.path.isdir(profile_dir)
     assert os.path.isdir(download_dir)
