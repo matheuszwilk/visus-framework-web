@@ -13,6 +13,7 @@ from selenium.common.exceptions import (
     WebDriverException,
 )
 from selenium.webdriver import ActionChains
+from selenium.webdriver.common.actions.action_builder import ActionBuilder
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.remote.webdriver import WebDriver
 from selenium.webdriver.remote.webelement import WebElement
@@ -40,6 +41,21 @@ _KEYMAP = {
     "End": Keys.END,
 }
 _MODMAP = {"Control": Keys.CONTROL, "Shift": Keys.SHIFT, "Alt": Keys.ALT, "Meta": Keys.META}
+
+
+def _parse_key(key: str) -> tuple[list[str], str]:
+    """Split a Playwright-style key string into (modifiers, main_key).
+
+    Examples::
+
+        "Enter"           -> ([], Keys.ENTER)
+        "Control+a"       -> ([Keys.CONTROL], "a")
+        "Control+Shift+T" -> ([Keys.CONTROL, Keys.SHIFT], "t")
+    """
+    parts = key.split("+")
+    mods = [_MODMAP[p] for p in parts[:-1] if p in _MODMAP]
+    main = _KEYMAP.get(parts[-1], parts[-1])
+    return mods, main
 
 
 def translate_exc(exc: Exception) -> errors.VisusWebError:
@@ -309,9 +325,7 @@ class SeleniumPageDelegate:
         self._ensure_bundle()
 
         def _do(el: WebElement) -> None:
-            parts = key.split("+")
-            mods = [_MODMAP[p] for p in parts[:-1] if p in _MODMAP]
-            main = _KEYMAP.get(parts[-1], parts[-1])
+            mods, main = _parse_key(key)
             if mods:
                 self._driver.execute_script("arguments[0].focus();", el)
                 ac = ActionChains(self._driver)
@@ -589,6 +603,82 @@ class SeleniumPageDelegate:
             if time.monotonic() >= deadline:
                 raise errors.VisusTimeoutError(f"no new download completed within {timeout_ms} ms")
             time.sleep(0.05)
+
+    # ------------------------------------------------------------------
+    # Low-level input device methods
+    # ------------------------------------------------------------------
+
+    def mouse_move(self, x: float, y: float) -> None:
+        self._activate()
+        ab = ActionBuilder(self._driver)
+        ab.pointer_action.move_to_location(int(x), int(y))
+        ab.perform()
+
+    def mouse_down(self) -> None:
+        self._activate()
+        ab = ActionBuilder(self._driver)
+        ab.pointer_action.pointer_down()
+        ab.perform()
+
+    def mouse_up(self) -> None:
+        self._activate()
+        ab = ActionBuilder(self._driver)
+        ab.pointer_action.pointer_up()
+        ab.perform()
+
+    def mouse_click(self, x: float, y: float) -> None:
+        self._activate()
+        ab = ActionBuilder(self._driver)
+        ab.pointer_action.move_to_location(int(x), int(y)).pointer_down().pointer_up()
+        ab.perform()
+
+    def mouse_dblclick(self, x: float, y: float) -> None:
+        self._activate()
+        ab = ActionBuilder(self._driver)
+        (
+            ab.pointer_action.move_to_location(int(x), int(y))
+            .pointer_down()
+            .pointer_up()
+            .pointer_down()
+            .pointer_up()
+        )
+        ab.perform()
+
+    def mouse_wheel(self, delta_x: float, delta_y: float) -> None:
+        self._activate()
+        ActionChains(self._driver).scroll_by_amount(int(delta_x), int(delta_y)).perform()
+
+    def keyboard_down(self, key: str) -> None:
+        self._activate()
+        _mods, mapped = _parse_key(key)
+        ActionChains(self._driver).key_down(mapped).perform()
+
+    def keyboard_up(self, key: str) -> None:
+        self._activate()
+        _mods, mapped = _parse_key(key)
+        ActionChains(self._driver).key_up(mapped).perform()
+
+    def keyboard_press(self, key: str) -> None:
+        self._activate()
+        mods, main = _parse_key(key)
+        ac = ActionChains(self._driver)
+        if mods:
+            for m in mods:
+                ac.key_down(m)
+            ac.send_keys(main)
+            for m in reversed(mods):
+                ac.key_up(m)
+        else:
+            ac.send_keys(main)
+        ac.perform()
+
+    def keyboard_type(self, text: str) -> None:
+        self._activate()
+        ActionChains(self._driver).send_keys(text).perform()
+
+    def keyboard_insert_text(self, text: str) -> None:
+        self._activate()
+        ActionChains(self._driver).send_keys(text).perform()
 
 
 class SeleniumContextDelegate:

@@ -1,0 +1,8 @@
+<!doctype html><html><head><title>input</title></head><body>
+<div id="pad" style="position:absolute;left:0;top:80px;width:400px;height:200px;background:#eee"
+  onmousedown="m.textContent='down'" onmouseup="m.textContent+=' up'"
+  onclick="c.textContent='clicked'" onwheel="w.textContent='wheel'"></div>
+<div id="m"></div><div id="c"></div><div id="w"></div>
+<input id="k" onkeydown="if(event.key==='Enter')k2.textContent='enter'"/><div id="k2"></div>
+<script>var m=document.getElementById('m'),c=document.getElementById('c'),w=document.getElementById('w'),k2=document.getElementById('k2');</script>
+</body></html>
