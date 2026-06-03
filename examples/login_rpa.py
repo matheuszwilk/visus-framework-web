@@ -26,6 +26,7 @@ LOGIN_URL = "https://practicetestautomation.com/practice-test-login/"
 USERNAME = "student"
 PASSWORD = "Password123"
 
+ENGINE = "chrome"  # which browser: "chrome" | "edge" | "firefox" | "edge_ie"
 HEADLESS = False  # watch the browser drive; set True for CI/headless runs
 DEMO_FAILURE = True  # end on a deliberately broken step to prove the report is still
 #                      generated — and to show the friendly "did you mean?" error.
@@ -42,7 +43,7 @@ def main() -> None:
     # broken run is always debuggable — no try/finally needed around the report.
     try:
         with tracing.record(str(zip_path), report=str(report_html)):
-            with launch(headless=HEADLESS) as browser:
+            with launch(ENGINE, headless=HEADLESS) as browser:
                 page = browser.new_page()
 
                 # 1) abrir a página de login
