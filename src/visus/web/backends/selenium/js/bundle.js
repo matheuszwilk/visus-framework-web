@@ -319,6 +319,31 @@
     return out;
   }
 
+  function highlight(el) {
+    unhighlight();
+    if (!el || !el.getBoundingClientRect) return null;
+    var r = el.getBoundingClientRect();
+    var box = document.createElement("div");
+    box.setAttribute("data-visus-highlight", "1");
+    box.style.cssText =
+      "position:fixed;z-index:2147483647;pointer-events:none;box-sizing:border-box;" +
+      "border:3px solid #cc785c;box-shadow:0 0 0 2px rgba(204,120,92,.35);" +
+      "left:" + r.left + "px;top:" + r.top + "px;width:" + r.width + "px;height:" + r.height + "px;";
+    var cx = document.createElement("div");
+    cx.setAttribute("data-visus-highlight", "1");
+    cx.style.cssText =
+      "position:fixed;z-index:2147483647;pointer-events:none;width:10px;height:10px;" +
+      "border:2px solid #cc785c;border-radius:50%;" +
+      "left:" + (r.left + r.width / 2 - 5) + "px;top:" + (r.top + r.height / 2 - 5) + "px;";
+    document.documentElement.appendChild(box);
+    document.documentElement.appendChild(cx);
+    return { x: Math.round(r.left), y: Math.round(r.top), w: Math.round(r.width), h: Math.round(r.height) };
+  }
+  function unhighlight() {
+    var n = document.querySelectorAll("[data-visus-highlight]");
+    for (var i = 0; i < n.length; i++) n[i].parentNode.removeChild(n[i]);
+  }
+
   window.__visus = {
     queryAll: queryAll,
     elementState: elementState,
@@ -330,5 +355,7 @@
     hitTarget: hitTarget,
     checkStable: checkStable,
     snapshot: snapshot,
+    highlight: highlight,
+    unhighlight: unhighlight,
   };
 })();

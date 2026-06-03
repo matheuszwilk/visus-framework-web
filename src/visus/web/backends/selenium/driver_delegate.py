@@ -710,6 +710,71 @@ class SeleniumPageDelegate:
     # Network controls (Chromium CDP — documented as Chromium-only)
     # ------------------------------------------------------------------
 
+    # ------------------------------------------------------------------
+    # Observability helpers — used by the Recorder; never raise out
+    # ------------------------------------------------------------------
+
+    def _try_resolve(self, selector: str | None) -> object | None:
+        if not selector:
+            return None
+        try:
+            from visus.web.backends.selenium.resolver import resolve_elements
+
+            els = resolve_elements(self._driver, self._ensure_bundle, selector)
+            return els[0] if els else None
+        except Exception:
+            return None
+
+    def capture_annotated_screenshot(self, selector: str | None) -> bytes:
+        self._activate()
+        self._ensure_bundle()
+        el = self._try_resolve(selector)
+        if el is not None:
+            try:
+                self._driver.execute_script("window.__visus.highlight(arguments[0]);", el)
+            except WebDriverException:
+                pass
+        png = cast(bytes, self._driver.get_screenshot_as_png())
+        try:
+            self._driver.execute_script("window.__visus.unhighlight();")
+        except WebDriverException:
+            pass
+        return png
+
+    def step_meta(self, selector: str | None) -> dict[str, object]:
+        self._activate()
+        meta: dict[str, object] = {
+            "url": None,
+            "title": None,
+            "role": None,
+            "name": None,
+            "bbox": None,
+        }
+        try:
+            meta["url"] = self._driver.current_url
+            meta["title"] = self._driver.title
+        except WebDriverException:
+            pass
+        el = self._try_resolve(selector)
+        if el is not None:
+            try:
+                self._ensure_bundle()
+                meta["role"] = self._driver.execute_script(
+                    "return window.__visus.role(arguments[0]);", el
+                )
+                meta["name"] = self._driver.execute_script(
+                    "return window.__visus.accessibleName(arguments[0]);", el
+                )
+                rect = self._driver.execute_script(
+                    "var r=arguments[0].getBoundingClientRect();"
+                    "return [Math.round(r.left),Math.round(r.top),Math.round(r.width),Math.round(r.height)];",
+                    el,
+                )
+                meta["bbox"] = rect
+            except WebDriverException:
+                pass
+        return meta
+
     def _cdp(self, cmd: str, params: dict) -> object:  # type: ignore[type-arg]
         """Execute a CDP command; raise VisusWebError on non-Chromium or failures."""
         self._activate()

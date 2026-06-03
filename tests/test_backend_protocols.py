@@ -112,6 +112,11 @@ class _FakePage:
     def block_urls(self, patterns): ...
     def set_extra_http_headers(self, headers): ...
     def set_offline(self, offline): ...
+    def capture_annotated_screenshot(self, selector):
+        return b""
+
+    def step_meta(self, selector):
+        return {}
 
 
 class _FakeContext:
