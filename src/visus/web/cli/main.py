@@ -23,12 +23,59 @@ def version() -> None:
     typer.echo(__version__)
 
 
+def _read_clipboard() -> str | None:
+    """Best-effort read of the OS clipboard (so 'Copy element' → translate just works)."""
+    import subprocess
+    import sys
+
+    cmd = {
+        "win32": ["powershell", "-NoProfile", "-Command", "Get-Clipboard -Raw"],
+        "darwin": ["pbpaste"],
+    }.get(sys.platform, ["xclip", "-selection", "clipboard", "-o"])
+    try:
+        return subprocess.run(cmd, capture_output=True, text=True, timeout=5).stdout or None
+    except Exception:
+        return None
+
+
 @app.command()
-def translate(html: str) -> None:
-    """Translate a pasted DevTools element (Copy element) into css/xpath/id/class selectors."""
+def translate(
+    html: str | None = typer.Argument(
+        None, help="Element outerHTML. Omit to read the clipboard; or use --file / pipe via stdin."
+    ),
+    file: str | None = typer.Option(
+        None, "--file", "-f", help="Read the element HTML from a file."
+    ),
+    as_json: bool = typer.Option(False, "--json", help="Emit JSON (handy for scripts / AI)."),
+) -> None:
+    """Translate a pasted DevTools element into css/xpath/id/class selectors.
+
+    Easiest on Windows (the shell mangles <, >, "): copy the element in DevTools
+    (Copy element), then run ``visus translate`` with no argument — it reads your
+    clipboard. You can also pass --file <path> or pipe the HTML via stdin.
+    """
+    import sys
+
     from visus.web.api._htmlsel import translate as _translate
 
-    r = _translate(html)
+    src = html
+    if file:
+        src = Path(file).read_text(encoding="utf-8")
+    elif src is None:
+        src = (None if sys.stdin.isatty() else sys.stdin.read()) or _read_clipboard()
+    if not src or "<" not in src:
+        typer.echo(
+            "No element HTML found. Pass it as an argument, use --file <path>, pipe it via "
+            "stdin, or copy the element to your clipboard first."
+        )
+        raise typer.Exit(2)
+
+    r = _translate(src)
+    if as_json:
+        import json
+
+        typer.echo(json.dumps(r, indent=2, ensure_ascii=False))
+        return
     typer.echo(f"tag    : {r['tag']}")
     if r["id"]:
         typer.echo(f"id     : {r['id']}")

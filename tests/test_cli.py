@@ -38,6 +38,46 @@ def test_translate_escapes_tailwind_classes() -> None:
     assert 'input[name="email"]' in r.output
 
 
+def test_translate_from_file(tmp_path) -> None:
+    f = tmp_path / "el.html"
+    f.write_text('<input id="x" name="y">', encoding="utf-8")
+    r = runner.invoke(app, ["translate", "--file", str(f)])
+    assert r.exit_code == 0 and "#x" in r.output
+
+
+def test_translate_from_stdin() -> None:
+    r = runner.invoke(app, ["translate"], input='<input id="z" name="w">')
+    assert r.exit_code == 0 and "#z" in r.output
+
+
+def test_translate_json_output() -> None:
+    import json
+
+    r = runner.invoke(app, ["translate", '<input id="a" name="b">', "--json"])
+    assert r.exit_code == 0
+    data = json.loads(r.output)
+    assert data["id"] == "#a" and data["css"] == "#a"
+
+
+def test_translate_from_clipboard(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("visus.web.cli.main._read_clipboard", lambda: '<input id="cb" name="n">')
+    r = runner.invoke(app, ["translate"], input="")  # no arg, empty stdin → clipboard
+    assert r.exit_code == 0 and "#cb" in r.output
+
+
+def test_translate_no_input_errors(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("visus.web.cli.main._read_clipboard", lambda: None)
+    r = runner.invoke(app, ["translate"], input="")
+    assert r.exit_code == 2 and "No element HTML" in r.output
+
+
+def test_read_clipboard_returns_str_or_none() -> None:
+    from visus.web.cli.main import _read_clipboard
+
+    result = _read_clipboard()
+    assert result is None or isinstance(result, str)
+
+
 def test_doctor_failed_engine(monkeypatch: pytest.MonkeyPatch) -> None:
     """Doctor exits 1 and prints FAILED when launch raises."""
     from visus.web import errors
