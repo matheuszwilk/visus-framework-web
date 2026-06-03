@@ -40,8 +40,8 @@ coverage.xml
 /.visus/
 downloads/
 *.trace.zip
-# rpa() default output folder (run.zip / report.html per run)
-/visus-runs/
+# rpa() default output folder (run.zip / report.html per run) — at any depth
+visus-runs/
 # WebDriver executables provided locally (e.g. the IE driver for Edge IE-mode) — never commit
 IEDriverServer.exe
 /*.exe
