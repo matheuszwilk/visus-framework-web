@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from visus.web import errors
+from visus.web import errors, tracing
 from visus.web.api.assertions import expect
 from visus.web.api.browser import Browser
 from visus.web.api.context import Context
@@ -22,6 +22,7 @@ __all__ = [
     "Context",
     "Page",
     "errors",
+    "tracing",
 ]
 
 
