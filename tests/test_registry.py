@@ -12,6 +12,15 @@ def test_chrome_config_present():
     assert callable(cfg.driver_factory)
 
 
-def test_unimplemented_engine_raises():
-    with pytest.raises(UnsupportedEngineError, match="firefox"):
-        get_browser_config(Engine.FIREFOX)
+def test_firefox_config_present():
+    """Firefox is now a registered engine (plug-in added in cross-browser slice)."""
+    cfg = get_browser_config(Engine.FIREFOX)
+    assert cfg.engine is Engine.FIREFOX
+    assert callable(cfg.options_factory)
+    assert callable(cfg.driver_factory)
+
+
+def test_unknown_engine_raises():
+    """Passing a raw string that is not a valid Engine value should raise."""
+    with pytest.raises((UnsupportedEngineError, ValueError)):
+        Engine.from_str("netscape")
