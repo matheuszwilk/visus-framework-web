@@ -28,6 +28,8 @@ _HELP = """commands:
   text N               print field N's text content
   screenshot [path]    save a screenshot (default screenshot.png)
   clear                remove the field highlight overlay
+  tabs                 list open tabs/windows (active marked *)
+  tab N                switch to tab/window N (omit N = newest)
   help                 show this help
   quit                 exit the console (the session stays alive)"""
 
@@ -116,6 +118,18 @@ def dispatch(line: str, send: SendFn) -> str:
             return f"saved {send('screenshot', args)}"
         if cmd == "clear":
             return str(send("clear_highlights", {}))
+        if cmd == "tabs":
+            items = send("tabs", {}).get("tabs", [])
+            if not items:
+                return "(no tabs)"
+            return "\n".join(
+                ("* " if t.get("active") else "  ")
+                + f"[{t['index']}] {str(t.get('title', ''))!r}  {t.get('url', '')}"
+                for t in items
+            )
+        if cmd == "tab":
+            r = send("tab", {"index": int(rest[0]) if rest else None})
+            return f"switched to tab {r['active']}: {str(r.get('title', ''))!r}"
         return f"unknown command {cmd!r} (try `help`)"
     except IndexError:
         return f"missing argument for `{cmd}` (try `help`)"

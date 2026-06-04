@@ -274,7 +274,9 @@ def session_status(
     if as_json:
         typer.echo(_json.dumps(info, indent=2, ensure_ascii=False))
         return
-    for k in ("pid", "port", "engine", "headless", "url", "title", "windows", "fields_cached"):
+    keys = ("pid", "port", "engine", "headless", "url", "title", "windows", "active_tab",
+            "fields_cached")
+    for k in keys:
         if k in info:
             typer.echo(f"{k:14}: {info[k]}")
 
@@ -432,6 +434,31 @@ def session_screenshot(
 def clear_highlights() -> None:
     """Remove the numbered field-highlight overlay."""
     typer.echo(_send("clear_highlights", {}))
+
+
+@app.command()
+def tabs(as_json: bool = typer.Option(False, "--json", help="Emit JSON.")) -> None:
+    """List open tabs/windows (the active one is marked with *)."""
+    result = _send("tabs", {})
+    if as_json:
+        typer.echo(_json.dumps(result, indent=2, ensure_ascii=False))
+        return
+    items = result.get("tabs", [])
+    if not items:
+        typer.echo("(no tabs)")
+        return
+    for t in items:
+        mark = "*" if t.get("active") else " "
+        typer.echo(f"{mark} [{t['index']}] {str(t.get('title', ''))!r}  {t.get('url', '')}")
+
+
+@app.command()
+def tab(
+    index: int = typer.Argument(None, help="Tab/window index from `visus tabs` (omit = newest)."),
+) -> None:
+    """Switch the session to a tab/window by index (or the newest if omitted)."""
+    result = _send("tab", {"index": index})
+    typer.echo(f"switched to tab {result['active']}: {str(result.get('title', ''))!r}")
 
 
 @app.command()

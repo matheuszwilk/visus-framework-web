@@ -85,6 +85,7 @@ class SessionHandler:
         self._page: Page | None = None
         self._fields: list[Field] = []
         self._known_handles: list[str] = []
+        self._active_handle: str | None = None
 
     # --- lifecycle -------------------------------------------------------
     def _ensure(self) -> None:
@@ -105,50 +106,45 @@ class SessionHandler:
                 raise
 
     def page(self) -> Page:
-        """The page to operate on — the window/tab the user is currently focused on.
+        """The page to operate on — the active window/tab.
 
-        A modal/dialog is part of the same document, so it is already covered by
-        the focused page; a new tab or popup window is followed automatically.
+        Auto-follows a newly-opened tab/popup window, otherwise stays on the
+        last-active one (switch explicitly with the ``tab`` op). A modal/dialog is
+        part of the same document, so it is already covered by the active page.
         """
         return self._active_page()
+
+    def _driver(self) -> Any:
+        return getattr(getattr(self._page, "_delegate", None), "_driver", None)
 
     def _active_page(self) -> Page:
         self._ensure()
         if self._page is None:
             raise RuntimeError("session page is not available")
-        delegate = getattr(self._page, "_delegate", None)
-        driver = getattr(delegate, "_driver", None)
+        driver = self._driver()
         if driver is None:
-            return self._page  # non-selenium page (tests) — no focus tracking
+            return self._page  # non-selenium page (tests) — no tab tracking
         try:
             handles = list(driver.window_handles)
         except Exception:  # noqa: BLE001
             return self._page
         if not handles:
             return self._page
-        focused = self._focused_handle(driver, handles)
-        if getattr(delegate, "_handle", None) == focused:
+        handle = self._resolve_active(handles)
+        if getattr(self._page._delegate, "_handle", None) == handle:
             return self._page
-        # Bind a page to whatever window/tab now has focus (new tab, popup, ...).
-        return Page(SeleniumPageDelegate(driver, focused), self._page._defaults)
+        return Page(SeleniumPageDelegate(driver, handle), self._page._defaults)
 
-    def _focused_handle(self, driver: Any, handles: list[str]) -> str:
-        """Pick the focused window: document.hasFocus() wins (where the user is);
-        else a freshly-opened window; else the current one; else the newest."""
-        prev = self._known_handles
+    def _resolve_active(self, handles: list[str]) -> str:
+        """Pick the active handle: auto-follow a newly-opened tab/window, else stay
+        on the last-active one (sticky), else the newest. The ``tab`` op overrides."""
+        new = [h for h in handles if h not in self._known_handles]
         self._known_handles = list(handles)
-        for h in handles:
-            try:
-                driver.switch_to.window(h)
-                if driver.execute_script("return document.hasFocus()"):
-                    return h
-            except Exception:  # noqa: BLE001
-                continue
-        new = [h for h in handles if h not in prev]
         if new:
-            return new[-1]
-        cur = getattr(getattr(self._page, "_delegate", None), "_handle", None)
-        return cast(str, cur if cur in handles else handles[-1])
+            self._active_handle = new[-1]  # follow the newest new tab/popup
+        if self._active_handle not in handles:
+            self._active_handle = handles[-1]
+        return self._active_handle
 
     def close(self) -> None:
         if self._browser is not None:
@@ -257,6 +253,52 @@ class SessionHandler:
         self.page().clear_highlights()
         return "cleared"
 
+    def _op_tabs(self, args: dict[str, Any]) -> dict[str, Any]:
+        """List every open tab/window with its title/url and the active marker."""
+        self._ensure()
+        driver = self._driver()
+        if driver is None:
+            return {"tabs": [], "active": None}
+        handles = list(driver.window_handles)
+        active = self._resolve_active(handles)
+        tabs: list[dict[str, Any]] = []
+        for i, h in enumerate(handles):
+            try:
+                driver.switch_to.window(h)
+                title, url = driver.title, driver.current_url
+            except Exception:  # noqa: BLE001
+                title, url = "", ""
+            tabs.append({"index": i, "title": title, "url": url, "active": h == active})
+        try:
+            driver.switch_to.window(active)  # restore the active tab
+        except Exception:  # noqa: BLE001
+            pass
+        return {"tabs": tabs, "active": handles.index(active) if active in handles else None}
+
+    def _op_tab(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Switch the active tab/window by index (omit/None → jump to the newest)."""
+        self._ensure()
+        driver = self._driver()
+        if driver is None:
+            raise RuntimeError("no live browser")
+        handles = list(driver.window_handles)
+        self._known_handles = list(handles)
+        idx = args.get("index")
+        if idx is None:
+            self._active_handle = handles[-1]
+        else:
+            i = int(idx)
+            if i < 0 or i >= len(handles):
+                raise IndexError(f"tab index {i} out of range (have {len(handles)} tabs)")
+            self._active_handle = handles[i]
+        self._fields = []  # cached field indices belonged to the previous tab
+        try:
+            driver.switch_to.window(self._active_handle)
+            title = driver.title
+        except Exception:  # noqa: BLE001
+            title = ""
+        return {"active": handles.index(self._active_handle), "title": title}
+
     def _op_status(self, args: dict[str, Any]) -> dict[str, Any]:
         running = self._browser is not None
         info: dict[str, Any] = {
@@ -271,6 +313,8 @@ class SessionHandler:
                 info["url"] = p.url
                 info["title"] = p.title()
                 info["windows"] = len(self._known_handles)
+                if self._active_handle in self._known_handles:
+                    info["active_tab"] = self._known_handles.index(self._active_handle)
             except Exception:  # noqa: BLE001
                 pass
         return info

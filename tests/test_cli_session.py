@@ -1213,3 +1213,77 @@ def test_handler_follows_focus_to_a_new_window() -> None:
         assert h.handle("status", {})["result"]["windows"] == 2
     finally:
         h.close()
+
+
+@pytest.mark.browser
+def test_handler_manual_tab_switch_lists_and_acts_on_chosen_tab() -> None:
+    # `tabs` lists every window/tab; `tab N` switches manually so list_fields runs
+    # on the chosen tab (both directions), not just the auto-followed newest.
+    from visus.web.cli.session_server import SessionHandler
+
+    h = SessionHandler(
+        engine="chrome",
+        headless=True,
+        url="data:text/html,<button id=firstbtn>First</button>",
+    )
+    try:
+        h.handle("list_fields", {"highlight": False})  # establishes tab 0
+        driver = h._page._delegate._driver  # type: ignore[attr-defined]
+        driver.switch_to.new_window("tab")
+        driver.get("data:text/html,<button id=secondbtn>Second</button>")
+        h.handle("list_fields", {"highlight": False})  # auto-follows the new tab
+
+        tabs = h.handle("tabs", {})["result"]
+        assert len(tabs["tabs"]) == 2
+
+        # manual switch BACK to tab 0
+        assert h.handle("tab", {"index": 0})["result"]["active"] == 0
+        back = h.handle("list_fields", {"highlight": False})
+        assert "#firstbtn" in {f["locator"] for f in back["result"]["fields"]}
+
+        # manual switch to tab 1
+        h.handle("tab", {"index": 1})
+        fwd = h.handle("list_fields", {"highlight": False})
+        assert "#secondbtn" in {f["locator"] for f in fwd["result"]["fields"]}
+
+        # out-of-range index is a clean error, not a crash
+        assert h.handle("tab", {"index": 9})["ok"] is False
+    finally:
+        h.close()
+
+
+def test_cli_tabs_and_tab(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, Any] = {}
+
+    def fake_send(op: str, args: dict[str, Any] | None = None) -> Any:
+        captured["call"] = (op, args)
+        if op == "tabs":
+            return {
+                "tabs": [
+                    {"index": 0, "title": "A", "url": "u0", "active": True},
+                    {"index": 1, "title": "B", "url": "u1", "active": False},
+                ],
+                "active": 0,
+            }
+        return {"active": 1, "title": "B"}
+
+    monkeypatch.setattr(session_client, "send", lambda op, args=None: fake_send(op, args))
+    r = runner.invoke(app, ["tabs"])
+    assert r.exit_code == 0 and "[0]" in r.output and "[1]" in r.output and "*" in r.output
+    r2 = runner.invoke(app, ["tab", "1"])
+    assert r2.exit_code == 0 and "switched to tab 1" in r2.output
+    assert captured["call"] == ("tab", {"index": 1})
+
+
+def test_dispatch_tabs_and_tab() -> None:
+    calls: list[tuple[str, Any]] = []
+
+    def send(op: str, args: dict[str, Any]) -> Any:
+        calls.append((op, args))
+        if op == "tabs":
+            return {"tabs": [{"index": 0, "title": "A", "url": "u", "active": True}], "active": 0}
+        return {"active": 0, "title": "A"}
+
+    assert "[0]" in console.dispatch("tabs", send)
+    assert "switched to tab 0" in console.dispatch("tab 0", send)
+    assert calls[-1] == ("tab", {"index": 0})
