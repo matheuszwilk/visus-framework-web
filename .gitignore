@@ -2,6 +2,9 @@
 /playwright/
 /botcity-framework-web-python/
 
+# ---- Local-only planning docs (specs/plans kept on disk, NOT tracked) ----
+/docs/
+
 # ---- Workflow research temp files ----
 _synthesis.tmp.md
 _report_*.tmp.md
