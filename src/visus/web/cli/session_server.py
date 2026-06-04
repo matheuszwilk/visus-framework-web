@@ -24,13 +24,26 @@ import time
 from pathlib import Path
 from typing import Any, cast
 
-from visus.web import Engine, launch
+from visus.web import Engine, errors, launch
+from visus.web.api.assertions import expect
 from visus.web.api.browser import Browser
 from visus.web.api.context import Context
 from visus.web.api.fields import Field
 from visus.web.api.locator import Locator
 from visus.web.api.page import Page
 from visus.web.backends.selenium.driver_delegate import SeleniumPageDelegate
+
+
+def _any_match_visible(loc: Locator) -> bool:
+    """True if at least one element the locator matches is visible.
+
+    Local copy of the MCP helper: tolerant of mid-navigation errors (treated as
+    "not yet visible") and of locators that match several elements.
+    """
+    try:
+        return any(loc.nth(i).is_visible() for i in range(loc.count()))
+    except errors.VisusWebError:
+        return False
 
 
 def make_locator(
@@ -154,6 +167,20 @@ class SessionHandler:
         self._page = None
         self._fields = []
 
+    def context(self) -> Context:
+        """The browser context (shared with the active page) — cookies live here.
+
+        Cookies are a CONTEXT concern, not a page one (mirrors the MCP server).
+        The daemon's pages all share the launch driver's default context, so the
+        first context is the right one for cookie reads/writes.
+        """
+        self._ensure()
+        assert self._browser is not None
+        contexts = self._browser.contexts
+        if not contexts:
+            raise RuntimeError("no browser context available")
+        return contexts[0]
+
     # --- targeting -------------------------------------------------------
     def _resolve_field(self, index: int) -> Locator:
         """Re-resolve a cached field for an action via the foundation contract."""
@@ -167,6 +194,13 @@ class SessionHandler:
         for sel in field.frame:
             root = root.frame_locator(sel)
         return cast(Locator, root.locator(field.locator, deep=field.deep))
+
+    @staticmethod
+    def _has_target(args: dict[str, Any]) -> bool:
+        """True if args carry an explicit target (index/selector/role/target_text)."""
+        if args.get("index") is not None:
+            return True
+        return any(args.get(k) is not None for k in ("selector", "role", "target_text"))
 
     def _target(self, args: dict[str, Any]) -> Locator:
         """Resolve the action target: cached index OR a make_locator target.
@@ -245,13 +279,246 @@ class SessionHandler:
         return page.url
 
     def _op_screenshot(self, args: dict[str, Any]) -> str:
+        """Screenshot the page (optionally full-page) or a single element.
+
+        Mirrors ``browser_screenshot`` in the MCP server: when a target
+        (index/selector/role/target_text) is given, screenshot that element via
+        ``Locator.screenshot``; otherwise screenshot the page, honouring
+        ``full_page``.
+        """
         path = args.get("path") or "screenshot.png"
-        self.page().screenshot(path=path)
+        if self._has_target(args):
+            self._target(args).screenshot(path=path)
+        else:
+            self.page().screenshot(path=path, full_page=bool(args.get("full_page")))
         return str(Path(path).resolve())
 
     def _op_clear_highlights(self, args: dict[str, Any]) -> str:
         self.page().clear_highlights()
         return "cleared"
+
+    # --- navigation ------------------------------------------------------
+    def _op_back(self, args: dict[str, Any]) -> str:
+        page = self.page()
+        page.go_back()
+        return page.url
+
+    def _op_forward(self, args: dict[str, Any]) -> str:
+        page = self.page()
+        page.go_forward()
+        return page.url
+
+    def _op_reload(self, args: dict[str, Any]) -> str:
+        page = self.page()
+        page.reload()
+        return page.url
+
+    # --- inspect ---------------------------------------------------------
+    def _op_title(self, args: dict[str, Any]) -> str:
+        return self.page().title()
+
+    def _op_url(self, args: dict[str, Any]) -> str:
+        return self.page().url
+
+    def _op_snapshot(self, args: dict[str, Any]) -> dict[str, Any]:
+        return {"elements": self.page().snapshot()}
+
+    def _op_get_attribute(self, args: dict[str, Any]) -> str | None:
+        name = args.get("attr_name", "")
+        return self._target(args).first().get_attribute(name)
+
+    def _op_count(self, args: dict[str, Any]) -> int:
+        return self._target(args).count()
+
+    # --- actions ---------------------------------------------------------
+    def _op_hover(self, args: dict[str, Any]) -> str:
+        self._target(args).hover()
+        return "hovered"
+
+    def _op_dblclick(self, args: dict[str, Any]) -> str:
+        self._target(args).dblclick()
+        return "double-clicked"
+
+    def _op_focus(self, args: dict[str, Any]) -> str:
+        self._target(args).focus()
+        return "focused"
+
+    def _op_clear_input(self, args: dict[str, Any]) -> str:
+        """Clear an input's value (mirrors browser_clear; distinct from clear_highlights)."""
+        self._target(args).clear()
+        return "cleared"
+
+    def _op_drag(self, args: dict[str, Any]) -> str:
+        src = self._target(args)
+        target_selector = args.get("target_selector")
+        if target_selector is not None:
+            tgt = self.page().locator(target_selector)
+        elif args.get("target_index") is not None:
+            tgt = self._resolve_field(int(args["target_index"]))
+        else:
+            raise ValueError("provide a drag target: target_selector or target_index")
+        src.drag_to(tgt)
+        if target_selector is not None:
+            return f"dragged to {target_selector!r}"
+        return f"dragged to field {args['target_index']}"
+
+    def _op_upload(self, args: dict[str, Any]) -> str:
+        paths = args.get("paths") or []
+        self._target(args).set_input_files(paths)
+        return f"set {len(paths)} file(s)"
+
+    # --- wait / expect ---------------------------------------------------
+    def _op_wait(self, args: dict[str, Any]) -> str:
+        state = args.get("state") or "visible"
+        loc = self._target(args)
+        timeout = args.get("timeout")
+        ms = 5000 if timeout is None else int(timeout)
+        want_visible = state != "hidden"
+        deadline = time.monotonic() + ms / 1000.0
+        while True:
+            if _any_match_visible(loc) == want_visible:
+                return f"element is {state}"
+            if time.monotonic() >= deadline:
+                raise AssertionError(f"wait: no element became {state} within {ms}ms")
+            time.sleep(0.1)
+
+    def _op_expect_text(self, args: dict[str, Any]) -> str:
+        expected = args.get("expected_text", "")
+        loc = self._target(args)
+        timeout = args.get("timeout")
+        try:
+            expect(loc.first()).to_have_text(
+                expected, timeout=int(timeout) if timeout is not None else None
+            )
+            return "PASSED"
+        except AssertionError as exc:
+            return f"FAILED: {exc}"
+
+    # --- new tab / close tab --------------------------------------------
+    def _op_tab_new(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Open a new tab/window, register it, and make it the active handle."""
+        self._ensure()
+        driver = self._driver()
+        if driver is None:
+            raise RuntimeError("no live browser")
+        before = list(driver.window_handles)
+        driver.switch_to.new_window("tab")
+        handles = list(driver.window_handles)
+        new = [h for h in handles if h not in before]
+        self._known_handles = handles
+        self._active_handle = new[-1] if new else handles[-1]
+        self._fields = []
+        url = args.get("url")
+        if url:
+            driver.switch_to.window(self._active_handle)
+            self.page().goto(url)
+        idx = handles.index(self._active_handle)
+        try:
+            driver.switch_to.window(self._active_handle)
+            title = driver.title
+        except Exception:  # noqa: BLE001
+            title = ""
+        return {"index": idx, "title": title}
+
+    def _op_tab_close(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Close a tab by index (default: the active one), resetting the active handle."""
+        self._ensure()
+        driver = self._driver()
+        if driver is None:
+            raise RuntimeError("no live browser")
+        handles = list(driver.window_handles)
+        idx = args.get("index")
+        if idx is None:
+            target = self._active_handle if self._active_handle in handles else handles[-1]
+            i = handles.index(target)
+        else:
+            i = int(idx)
+            if i < 0 or i >= len(handles):
+                raise IndexError(f"tab index {i} out of range (have {len(handles)} tabs)")
+            target = handles[i]
+        driver.switch_to.window(target)
+        driver.close()
+        remaining = list(driver.window_handles)
+        self._known_handles = remaining
+        self._fields = []
+        if not remaining:
+            self.close()
+            return {"closed": i, "remaining": 0}
+        self._active_handle = remaining[min(i, len(remaining) - 1)]
+        try:
+            driver.switch_to.window(self._active_handle)
+        except Exception:  # noqa: BLE001
+            pass
+        return {
+            "closed": i,
+            "remaining": len(remaining),
+            "active": remaining.index(self._active_handle),
+        }
+
+    # --- dialogs ---------------------------------------------------------
+    def _op_dialog(self, args: dict[str, Any]) -> str:
+        """Handle the next pending dialog (mirrors browser_handle_dialog exactly)."""
+        accept = bool(args.get("accept", True))
+        prompt_text = args.get("prompt_text")
+        page = self.page()
+        msg, typ = page._delegate.handle_next_dialog(
+            accept=accept,
+            prompt_text=prompt_text,
+            timeout_ms=5000,
+        )
+        action = "accepted" if accept else "dismissed"
+        return f"{action} {typ!r} dialog: {msg!r}"
+
+    # --- cookies (context-level) -----------------------------------------
+    def _op_cookies(self, args: dict[str, Any]) -> dict[str, Any]:
+        return {"cookies": self.context().cookies()}
+
+    def _op_add_cookies(self, args: dict[str, Any]) -> str:
+        cookies = args.get("cookies") or []
+        self.context().add_cookies(cookies)
+        return f"added {len(cookies)} cookie(s)"
+
+    def _op_clear_cookies(self, args: dict[str, Any]) -> str:
+        self.context().clear_cookies()
+        return "cookies cleared"
+
+    # --- javascript ------------------------------------------------------
+    def _op_eval(self, args: dict[str, Any]) -> dict[str, Any]:
+        expression = args.get("expression", "")
+        arg = args.get("arg")
+        return {"result": self.page().evaluate(expression, arg)}
+
+    # --- vision (requires the [vision] extra) ----------------------------
+    def _op_read_text(self, args: dict[str, Any]) -> str:
+        return self._target(args).ocr_text()
+
+    def _op_solve_captcha(self, args: dict[str, Any]) -> str:
+        loc = self._target(args)
+        return self.page().solve_captcha(loc)
+
+    def _op_find_image(self, args: dict[str, Any]) -> dict[str, Any]:
+        import io
+
+        import numpy as np
+        from PIL import Image as PILImage
+
+        from visus.web.vision import find_image
+
+        template_path = args.get("template_path", "")
+        confidence = float(args.get("confidence", 0.8))
+        page = self.page()
+        if args.get("selector") or args.get("role") or args.get("target_text") or (
+            args.get("index") is not None
+        ):
+            screenshot_bytes = self._target(args).screenshot()
+        else:
+            screenshot_bytes = page.screenshot()
+        source_img = np.array(PILImage.open(io.BytesIO(screenshot_bytes)).convert("RGB"))
+        template_img = np.array(PILImage.open(template_path).convert("RGB"))
+        match = find_image(source_img, template_img, confidence=confidence)
+        if match is None:
+            return {"found": False}
+        return {"found": True, "x": match.x, "y": match.y, "confidence": match.confidence}
 
     def _op_tabs(self, args: dict[str, Any]) -> dict[str, Any]:
         """List every open tab/window with its title/url and the active marker."""

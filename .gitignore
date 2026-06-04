@@ -40,7 +40,8 @@ coverage.xml
 .nox/
 
 # ---- Drivers / browser artifacts produced at runtime ----
-/.visus/
+# CLI session daemon dir (session.json, daemon.log) — at any depth
+.visus/
 downloads/
 *.trace.zip
 # rpa() default output folder (run.zip / report.html per run) — at any depth

@@ -71,8 +71,48 @@ class _FakeLocator:
     def press(self, key: str) -> None:
         self._log.append(f"press:{self._label}:{key}")
 
+    def hover(self) -> None:
+        self._log.append(f"hover:{self._label}")
+
+    def dblclick(self) -> None:
+        self._log.append(f"dblclick:{self._label}")
+
+    def focus(self) -> None:
+        self._log.append(f"focus:{self._label}")
+
+    def clear(self) -> None:
+        self._log.append(f"clear:{self._label}")
+
+    def drag_to(self, target: _FakeLocator) -> None:
+        self._log.append(f"drag:{self._label}->{target._label}")
+
+    def set_input_files(self, paths: list[str]) -> None:
+        self._log.append(f"upload:{self._label}:{','.join(paths)}")
+
+    def count(self) -> int:
+        self._log.append(f"count:{self._label}")
+        return 3
+
+    def nth(self, i: int) -> _FakeLocator:
+        return _FakeLocator(self._log, f"{self._label}[{i}]")
+
+    def is_visible(self) -> bool:
+        return True
+
+    def get_attribute(self, name: str) -> str:
+        return f"attr:{self._label}:{name}"
+
+    def ocr_text(self) -> str:
+        return f"ocr:{self._label}"
+
     def text_content(self) -> str:
         return f"text-of:{self._label}"
+
+    def screenshot(self, *, path: str | None = None) -> bytes:
+        self._log.append(f"screenshot:{self._label}")
+        if path:
+            Path(path).write_bytes(b"PNG")
+        return b"PNG"
 
 
 class _FakeField:
@@ -131,18 +171,61 @@ class _FakePage:
     def title(self) -> str:
         return "FakeTitle"
 
+    def go_back(self) -> None:
+        self.log.append("go_back")
+        self.url = "about:back"
+
+    def go_forward(self) -> None:
+        self.log.append("go_forward")
+        self.url = "about:forward"
+
+    def reload(self) -> None:
+        self.log.append("reload")
+
+    def snapshot(self) -> list[dict[str, Any]]:
+        return [{"role": "button", "name": "Go"}, {"role": "textbox", "name": "Email"}]
+
+    def evaluate(self, expression: str, arg: object = None) -> object:
+        self.log.append(f"eval:{expression}:{arg}")
+        return {"expr": expression, "arg": arg}
+
+    def solve_captcha(self, loc: _FakeLocator) -> str:
+        return f"captcha:{loc._label}"
+
     def clear_highlights(self) -> None:
         self.log.append("clear_highlights")
 
-    def screenshot(self, *, path: str | None = None) -> bytes:
+    def screenshot(self, *, path: str | None = None, full_page: bool = False) -> bytes:
+        self.log.append(f"screenshot:full_page={full_page}")
         if path:
             Path(path).write_bytes(b"PNG")
         return b"PNG"
 
 
+class _FakeContext:
+    def __init__(self) -> None:
+        self._cookies: list[dict[str, Any]] = [
+            {"name": "sid", "value": "abc", "domain": "x.test"}
+        ]
+
+    def cookies(self) -> list[dict[str, Any]]:
+        return list(self._cookies)
+
+    def add_cookies(self, cookies: list[dict[str, Any]]) -> None:
+        self._cookies.extend(cookies)
+
+    def clear_cookies(self) -> None:
+        self._cookies = []
+
+
 class _FakeBrowser:
     def __init__(self) -> None:
         self.closed = False
+        self._context = _FakeContext()
+
+    @property
+    def contexts(self) -> list[_FakeContext]:
+        return [self._context]
 
     def close(self) -> None:
         self.closed = True
@@ -242,6 +325,153 @@ def test_handle_target_without_target_errors() -> None:
     resp = h.handle("click", {})  # no index, no selector/role/text
     assert resp["ok"] is False
     assert "provide one of" in resp["error"]
+
+
+# ---------------------------------------------------------------------------
+# New ops — parity with the MCP browser_* tools (fake page/locator/context)
+# ---------------------------------------------------------------------------
+
+
+def test_handle_navigation_back_forward_reload() -> None:
+    page = _FakePage()
+    h = _handler_with_fake_page(page)
+    assert h.handle("back", {})["result"] == "about:back"
+    assert h.handle("forward", {})["result"] == "about:forward"
+    assert h.handle("reload", {})["result"] == page.url  # reload doesn't change url
+    assert "go_back" in page.log and "go_forward" in page.log and "reload" in page.log
+
+
+def test_handle_title_url_snapshot() -> None:
+    page = _FakePage()
+    h = _handler_with_fake_page(page)
+    assert h.handle("title", {})["result"] == "FakeTitle"
+    assert h.handle("url", {})["result"] == page.url
+    snap = h.handle("snapshot", {})["result"]
+    assert snap["elements"][0] == {"role": "button", "name": "Go"}
+
+
+def test_handle_get_attribute_and_count() -> None:
+    page = _FakePage()
+    h = _handler_with_fake_page(page)
+    resp = h.handle("get_attribute", {"selector": "#a", "attr_name": "href"})
+    assert resp["result"] == "attr:loc(#a,deep=False):href"
+    assert h.handle("count", {"selector": "#a"})["result"] == 3
+
+
+def test_handle_hover_dblclick_focus_clear_input_by_selector() -> None:
+    page = _FakePage()
+    h = _handler_with_fake_page(page)
+    assert h.handle("hover", {"selector": "#h"})["result"] == "hovered"
+    assert h.handle("dblclick", {"selector": "#d"})["result"] == "double-clicked"
+    assert h.handle("focus", {"selector": "#f"})["result"] == "focused"
+    assert h.handle("clear_input", {"selector": "#ci"})["result"] == "cleared"
+    assert "hover:loc(#h,deep=False)" in page.log
+    assert "dblclick:loc(#d,deep=False)" in page.log
+    assert "focus:loc(#f,deep=False)" in page.log
+    assert "clear:loc(#ci,deep=False)" in page.log
+
+
+def test_handle_drag_by_selector_target() -> None:
+    page = _FakePage()
+    h = _handler_with_fake_page(page)
+    resp = h.handle("drag", {"selector": "#src", "target_selector": "#dst"})
+    assert resp["ok"] is True and resp["result"] == "dragged to '#dst'"
+    assert "drag:loc(#src,deep=False)->loc(#dst,deep=False)" in page.log
+
+
+def test_handle_drag_by_index_targets() -> None:
+    page = _FakePage()
+    h = _handler_with_fake_page(page)
+    h.handle("list_fields", {})
+    resp = h.handle("drag", {"index": 0, "target_index": 1})
+    assert resp["ok"] is True and "dragged to field 1" == resp["result"]
+
+
+def test_handle_drag_without_target_errors() -> None:
+    page = _FakePage()
+    h = _handler_with_fake_page(page)
+    resp = h.handle("drag", {"selector": "#src"})
+    assert resp["ok"] is False and "drag target" in resp["error"]
+
+
+def test_handle_upload_sets_files() -> None:
+    page = _FakePage()
+    h = _handler_with_fake_page(page)
+    resp = h.handle("upload", {"selector": "#file", "paths": ["/a.png", "/b.png"]})
+    assert resp["result"] == "set 2 file(s)"
+    assert "upload:loc(#file,deep=False):/a.png,/b.png" in page.log
+
+
+def test_handle_wait_visible_passes_immediately() -> None:
+    page = _FakePage()
+    h = _handler_with_fake_page(page)
+    resp = h.handle("wait", {"selector": "#x", "state": "visible", "timeout": 1000})
+    assert resp["ok"] is True and resp["result"] == "element is visible"
+
+
+def test_handle_wait_hidden_times_out_cleanly() -> None:
+    page = _FakePage()
+    h = _handler_with_fake_page(page)
+    # The fake locator is always visible, so waiting for 'hidden' must time out.
+    resp = h.handle("wait", {"selector": "#x", "state": "hidden", "timeout": 50})
+    assert resp["ok"] is False and "hidden" in resp["error"]
+
+
+def test_handle_expect_text_passes() -> None:
+    page = _FakePage()
+    h = _handler_with_fake_page(page)
+
+    class _Expectable(_FakeLocator):
+        def to_have_text(self, expected: str, *, timeout: int | None = None) -> None:
+            if expected not in self.text_content():
+                raise AssertionError("mismatch")
+
+    # Monkeypatch expect() to wrap our fake first() locator.
+    import visus.web.cli.session_server as ss
+
+    page._fields = []
+    h._fields = []
+    loc = _Expectable([])
+    orig_target = h._target
+    h._target = lambda args: loc  # type: ignore[assignment, method-assign]
+    real_expect = ss.expect
+    ss.expect = lambda location: location  # type: ignore[assignment]
+    try:
+        resp = h.handle("expect_text", {"selector": "#x", "expected_text": "text-of:loc"})
+        assert resp["result"] == "PASSED"
+        resp2 = h.handle("expect_text", {"selector": "#x", "expected_text": "nope"})
+        assert resp2["result"].startswith("FAILED")
+    finally:
+        ss.expect = real_expect  # type: ignore[assignment]
+        h._target = orig_target  # type: ignore[method-assign]
+
+
+def test_handle_cookies_roundtrip() -> None:
+    page = _FakePage()
+    h = _handler_with_fake_page(page)
+    got = h.handle("cookies", {})["result"]
+    assert got["cookies"][0]["name"] == "sid"
+    assert h.handle("add_cookies", {"cookies": [{"name": "x", "value": "1"}]})["result"] == (
+        "added 1 cookie(s)"
+    )
+    assert any(c["name"] == "x" for c in h.handle("cookies", {})["result"]["cookies"])
+    assert h.handle("clear_cookies", {})["result"] == "cookies cleared"
+    assert h.handle("cookies", {})["result"]["cookies"] == []
+
+
+def test_handle_eval_returns_result() -> None:
+    page = _FakePage()
+    h = _handler_with_fake_page(page)
+    resp = h.handle("eval", {"expression": "() => 1", "arg": 7})
+    assert resp["ok"] is True
+    assert resp["result"]["result"] == {"expr": "() => 1", "arg": 7}
+
+
+def test_handle_read_text_and_solve_captcha() -> None:
+    page = _FakePage()
+    h = _handler_with_fake_page(page)
+    assert h.handle("read_text", {"selector": "#c"})["result"] == "ocr:loc(#c,deep=False)"
+    assert h.handle("solve_captcha", {"selector": "#c"})["result"] == "captcha:loc(#c,deep=False)"
 
 
 def test_handle_goto_screenshot_clear_status(tmp_path: Path) -> None:
@@ -1076,6 +1306,55 @@ def test_cli_check_uncheck_clear_screenshot(
     assert "did-screenshot" in runner.invoke(app, ["session-screenshot", "-o", str(out)]).output
 
 
+def test_cli_session_screenshot_full_page_and_element(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """--full-page and element targeting reach the daemon (MCP browser_screenshot parity)."""
+    calls: list[tuple[str, dict[str, Any]]] = []
+    monkeypatch.setattr(
+        session_client, "send", lambda op, args=None: calls.append((op, args or {})) or "/p.png"
+    )
+    out = tmp_path / "x.png"
+
+    # No target → page screenshot; full_page defaults to False and is forwarded.
+    assert runner.invoke(app, ["session-screenshot", "-o", str(out)]).exit_code == 0
+    assert calls[-1][0] == "screenshot"
+    assert calls[-1][1]["full_page"] is False
+    assert "index" not in calls[-1][1] and "selector" not in calls[-1][1]
+
+    # --full-page forwards full_page=True.
+    assert runner.invoke(app, ["session-screenshot", "-o", str(out), "--full-page"]).exit_code == 0
+    assert calls[-1][1]["full_page"] is True
+
+    # Element by index.
+    assert runner.invoke(app, ["session-screenshot", "-o", str(out), "2"]).exit_code == 0
+    assert calls[-1][1]["index"] == 2
+
+    # Element by selector.
+    assert (
+        runner.invoke(app, ["session-screenshot", "-o", str(out), "-s", "#hero"]).exit_code == 0
+    )
+    assert calls[-1][1]["selector"] == "#hero"
+
+
+def test_handle_screenshot_full_page_and_element(tmp_path: Path) -> None:
+    """The daemon op honours full_page and element targets (mirrors browser_screenshot)."""
+    page = _FakePage()
+    h = _handler_with_fake_page(page)
+
+    out = tmp_path / "full.png"
+    assert h.handle("screenshot", {"path": str(out), "full_page": True})["ok"] is True
+    assert out.read_bytes() == b"PNG"
+    assert "screenshot:full_page=True" in page.log
+
+    elem = tmp_path / "elem.png"
+    res = h.handle("screenshot", {"path": str(elem), "selector": "#hero"})
+    assert res["ok"] is True
+    assert elem.read_bytes() == b"PNG"
+    # The element path screenshots the locator, not the page.
+    assert any(entry.startswith("screenshot:loc(#hero") for entry in page.log)
+
+
 def test_cli_send_error_exits_1(monkeypatch: pytest.MonkeyPatch) -> None:
     def boom(op: str, args: dict[str, Any] | None = None) -> Any:
         raise session_client.SessionError("no live session")
@@ -1083,6 +1362,240 @@ def test_cli_send_error_exits_1(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(session_client, "send", boom)
     r = runner.invoke(app, ["click", "0"])
     assert r.exit_code == 1 and "no live session" in r.output
+
+
+# ---------------------------------------------------------------------------
+# New CLI commands — arg parsing (session_client.send monkeypatched)
+# ---------------------------------------------------------------------------
+
+
+def _record(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, dict[str, Any]]]:
+    """Monkeypatch session_client.send to record (op, args) and return a generic result."""
+    calls: list[tuple[str, dict[str, Any]]] = []
+
+    def fake_send(op: str, args: dict[str, Any] | None = None) -> Any:
+        calls.append((op, args or {}))
+        if op in ("back", "forward", "reload", "url", "title"):
+            return "http://dest"
+        if op == "snapshot":
+            return {"elements": [{"role": "button", "name": "Go"}]}
+        if op == "count":
+            return 3
+        if op == "cookies":
+            return {"cookies": [{"name": "sid", "value": "v", "domain": "d"}]}
+        if op == "eval":
+            return {"result": "evald"}
+        if op == "tab_new":
+            return {"index": 1, "title": "T"}
+        if op == "tab_close":
+            return {"closed": 1, "remaining": 1, "active": 0}
+        if op == "find_image":
+            return {"found": True, "x": 10, "y": 20, "confidence": 0.95}
+        return f"did-{op}"
+
+    monkeypatch.setattr(session_client, "send", fake_send)
+    return calls
+
+
+def test_cli_back_forward_reload(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = _record(monkeypatch)
+    assert "went back to http://dest" in runner.invoke(app, ["back"]).output
+    assert "went forward to http://dest" in runner.invoke(app, ["forward"]).output
+    assert "reloaded http://dest" in runner.invoke(app, ["reload"]).output
+    assert [c[0] for c in calls] == ["back", "forward", "reload"]
+
+
+def test_cli_title_url_snapshot(monkeypatch: pytest.MonkeyPatch) -> None:
+    _record(monkeypatch)
+    assert "http://dest" in runner.invoke(app, ["title"]).output
+    assert "http://dest" in runner.invoke(app, ["url"]).output
+    out = runner.invoke(app, ["snapshot"])
+    assert out.exit_code == 0 and "button" in out.output and "Go" in out.output
+    outj = runner.invoke(app, ["snapshot", "--json"])
+    assert json.loads(outj.output)[0]["role"] == "button"
+
+
+def test_cli_get_attribute(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = _record(monkeypatch)
+    r = runner.invoke(app, ["get-attribute", "href", "2"])
+    assert r.exit_code == 0
+    assert calls[-1] == ("get_attribute", {"index": 2, "attr_name": "href"})
+    r2 = runner.invoke(app, ["get-attribute", "href", "--selector", "#a"])
+    assert r2.exit_code == 0
+    assert calls[-1][1]["selector"] == "#a" and calls[-1][1]["attr_name"] == "href"
+
+
+def test_cli_count(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = _record(monkeypatch)
+    r = runner.invoke(app, ["count", "--selector", ".item"])
+    assert r.exit_code == 0 and "3" in r.output
+    assert calls[-1] == ("count", {"selector": ".item", "role": None, "name": None,
+                                    "target_text": None})
+
+
+def test_cli_hover_dblclick_focus_clear_input(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = _record(monkeypatch)
+    assert runner.invoke(app, ["hover", "1"]).exit_code == 0
+    assert runner.invoke(app, ["dblclick", "2"]).exit_code == 0
+    assert runner.invoke(app, ["focus", "3"]).exit_code == 0
+    assert runner.invoke(app, ["clear-input", "4"]).exit_code == 0
+    assert [c[0] for c in calls] == ["hover", "dblclick", "focus", "clear_input"]
+    assert calls[0][1] == {"index": 1}
+    assert calls[3][1] == {"index": 4}
+
+
+def test_cli_drag_by_index_and_selector(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = _record(monkeypatch)
+    assert runner.invoke(app, ["drag", "0", "1"]).exit_code == 0
+    assert calls[-1] == ("drag", {"index": 0, "target_index": 1})
+    assert runner.invoke(app, ["drag", "--selector", "#s", "--to-selector", "#t"]).exit_code == 0
+    assert calls[-1][1]["selector"] == "#s" and calls[-1][1]["target_selector"] == "#t"
+    assert runner.invoke(app, ["drag", "--selector", "#s", "--to-index", "4"]).exit_code == 0
+    assert calls[-1][1]["target_index"] == 4
+
+
+def test_cli_drag_requires_target(monkeypatch: pytest.MonkeyPatch) -> None:
+    _record(monkeypatch)
+    r = runner.invoke(app, ["drag", "--selector", "#s"])
+    assert r.exit_code == 1 and "drag target" in r.output
+
+
+def test_cli_upload(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    calls = _record(monkeypatch)
+    f1 = tmp_path / "a.txt"
+    f1.write_text("x")
+    r = runner.invoke(app, ["upload", "2", str(f1)])
+    assert r.exit_code == 0
+    assert calls[-1][0] == "upload" and calls[-1][1]["index"] == 2
+    assert calls[-1][1]["paths"] == [str(f1.resolve())]
+
+
+def test_cli_upload_requires_paths(monkeypatch: pytest.MonkeyPatch) -> None:
+    _record(monkeypatch)
+    r = runner.invoke(app, ["upload", "2"])
+    assert r.exit_code == 1 and "file path" in r.output
+
+
+def test_cli_wait(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = _record(monkeypatch)
+    r = runner.invoke(app, ["wait", "0", "--state", "hidden", "--timeout", "1234"])
+    assert r.exit_code == 0
+    assert calls[-1][0] == "wait"
+    assert calls[-1][1]["state"] == "hidden" and calls[-1][1]["timeout"] == 1234
+
+
+def test_cli_expect_text(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = _record(monkeypatch)
+    r = runner.invoke(app, ["expect-text", "0", "Welcome"])
+    assert r.exit_code == 0
+    assert calls[-1] == ("expect_text", {"index": 0, "expected_text": "Welcome"})
+    r2 = runner.invoke(app, ["expect-text", "--selector", "#h", "--expected", "Hi", "--timeout",
+                             "500"])
+    assert r2.exit_code == 0
+    assert calls[-1][1]["expected_text"] == "Hi" and calls[-1][1]["timeout"] == 500
+
+
+def test_cli_expect_text_requires_value(monkeypatch: pytest.MonkeyPatch) -> None:
+    _record(monkeypatch)
+    r = runner.invoke(app, ["expect-text", "--selector", "#h"])
+    assert r.exit_code == 1 and "expected text" in r.output
+
+
+def test_cli_tab_new_and_close(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = _record(monkeypatch)
+    r = runner.invoke(app, ["tab-new", "http://x"])
+    assert r.exit_code == 0 and "opened tab 1" in r.output
+    assert calls[-1] == ("tab_new", {"url": "http://x"})
+    r2 = runner.invoke(app, ["tab-close", "1"])
+    assert r2.exit_code == 0 and "closed tab 1" in r2.output
+    assert calls[-1] == ("tab_close", {"index": 1})
+
+
+def test_cli_tab_close_last_tab_message(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        session_client, "send", lambda op, args=None: {"closed": 0, "remaining": 0}
+    )
+    r = runner.invoke(app, ["tab-close"])
+    assert r.exit_code == 0 and "session stopped" in r.output
+
+
+def test_cli_dialog(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = _record(monkeypatch)
+    assert runner.invoke(app, ["dialog"]).exit_code == 0
+    assert calls[-1] == ("dialog", {"accept": True, "prompt_text": None})
+    assert runner.invoke(app, ["dialog", "--dismiss"]).exit_code == 0
+    assert calls[-1][1]["accept"] is False
+    assert runner.invoke(app, ["dialog", "--prompt-text", "hi"]).exit_code == 0
+    assert calls[-1][1]["prompt_text"] == "hi"
+
+
+def test_cli_cookies_list(monkeypatch: pytest.MonkeyPatch) -> None:
+    _record(monkeypatch)
+    r = runner.invoke(app, ["cookies"])
+    assert r.exit_code == 0 and "sid=v" in r.output
+    rj = runner.invoke(app, ["cookies", "--json"])
+    assert json.loads(rj.output)[0]["name"] == "sid"
+
+
+def test_cli_add_cookies(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = _record(monkeypatch)
+    r = runner.invoke(app, ["add-cookies", '[{"name":"a","value":"b","url":"http://x"}]'])
+    assert r.exit_code == 0
+    assert calls[-1][0] == "add_cookies"
+    assert calls[-1][1]["cookies"] == [{"name": "a", "value": "b", "url": "http://x"}]
+
+
+def test_cli_add_cookies_bad_json(monkeypatch: pytest.MonkeyPatch) -> None:
+    _record(monkeypatch)
+    assert runner.invoke(app, ["add-cookies", "{not json"]).exit_code == 1
+    r2 = runner.invoke(app, ["add-cookies", '{"name":"a"}'])  # not a list
+    assert r2.exit_code == 1 and "JSON list" in r2.output
+
+
+def test_cli_clear_cookies(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = _record(monkeypatch)
+    assert runner.invoke(app, ["clear-cookies"]).exit_code == 0
+    assert calls[-1][0] == "clear_cookies"
+
+
+def test_cli_eval(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = _record(monkeypatch)
+    r = runner.invoke(app, ["eval", "() => 1+1", "42"])
+    assert r.exit_code == 0 and "evald" in r.output
+    assert calls[-1][0] == "eval"
+    assert calls[-1][1]["expression"] == "() => 1+1" and calls[-1][1]["arg"] == 42
+    # non-JSON arg falls back to a plain string
+    runner.invoke(app, ["eval", "() => x", "plainstr"])
+    assert calls[-1][1]["arg"] == "plainstr"
+
+
+def test_cli_read_text_and_solve_captcha(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = _record(monkeypatch)
+    assert runner.invoke(app, ["read-text", "0"]).exit_code == 0
+    assert calls[-1] == ("read_text", {"index": 0})
+    assert runner.invoke(app, ["solve-captcha", "--selector", "#c"]).exit_code == 0
+    assert calls[-1][0] == "solve_captcha" and calls[-1][1]["selector"] == "#c"
+
+
+def test_cli_find_image(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    calls = _record(monkeypatch)
+    tpl = tmp_path / "tpl.png"
+    tpl.write_bytes(b"x")
+    r = runner.invoke(app, ["find-image", str(tpl), "--confidence", "0.9"])
+    assert r.exit_code == 0 and "found at (10, 20)" in r.output
+    assert calls[-1][0] == "find_image"
+    assert calls[-1][1]["template_path"] == str(tpl.resolve())
+    assert calls[-1][1]["confidence"] == 0.9
+    rj = runner.invoke(app, ["find-image", str(tpl), "--json"])
+    assert json.loads(rj.output)["found"] is True
+
+
+def test_cli_find_image_not_found(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(session_client, "send", lambda op, args=None: {"found": False})
+    tpl = tmp_path / "tpl.png"
+    tpl.write_bytes(b"x")
+    r = runner.invoke(app, ["find-image", str(tpl)])
+    assert r.exit_code == 0 and "not found" in r.output
 
 
 def test_cli_session_start(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1252,6 +1765,146 @@ def test_handler_manual_tab_switch_lists_and_acts_on_chosen_tab() -> None:
         h.close()
 
 
+# ---------------------------------------------------------------------------
+# New ops — REAL headless page e2e (browser-marked)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.browser
+def test_handle_real_back_forward_reload(base_url: str) -> None:
+    h = session_server.SessionHandler(engine="chrome", headless=True, url=f"{base_url}/fields.html")
+    try:
+        h.handle("goto", {"url": f"{base_url}/index.html"})
+        back = h.handle("back", {})
+        assert back["ok"] is True and back["result"].endswith("fields.html")
+        fwd = h.handle("forward", {})
+        assert fwd["ok"] is True and fwd["result"].endswith("index.html")
+        rel = h.handle("reload", {})
+        assert rel["ok"] is True and rel["result"].endswith("index.html")
+    finally:
+        h.close()
+
+
+@pytest.mark.browser
+def test_handle_real_title_url_snapshot(base_url: str) -> None:
+    h = session_server.SessionHandler(engine="chrome", headless=True, url=f"{base_url}/fields.html")
+    try:
+        assert h.handle("title", {})["result"] == "fields fixture"
+        assert h.handle("url", {})["result"].endswith("fields.html")
+        snap = h.handle("snapshot", {})
+        assert snap["ok"] is True and isinstance(snap["result"]["elements"], list)
+    finally:
+        h.close()
+
+
+@pytest.mark.browser
+def test_handle_real_get_attribute_and_count(base_url: str) -> None:
+    h = session_server.SessionHandler(engine="chrome", headless=True, url=f"{base_url}/fields.html")
+    try:
+        href = h.handle("get_attribute", {"selector": "#lnk", "attr_name": "href"})
+        assert href["ok"] is True and href["result"] == "https://example.com/"
+        cnt = h.handle("count", {"selector": "input"})
+        assert cnt["ok"] is True and cnt["result"] >= 5
+    finally:
+        h.close()
+
+
+@pytest.mark.browser
+def test_handle_real_hover_dblclick_focus(base_url: str) -> None:
+    h = session_server.SessionHandler(engine="chrome", headless=True, url=f"{base_url}/fields.html")
+    try:
+        assert h.handle("hover", {"selector": "#btn"})["result"] == "hovered"
+        assert h.handle("dblclick", {"selector": "#btn"})["result"] == "double-clicked"
+        assert h.handle("focus", {"selector": "#topinput"})["result"] == "focused"
+    finally:
+        h.close()
+
+
+@pytest.mark.browser
+def test_handle_real_eval(base_url: str) -> None:
+    h = session_server.SessionHandler(engine="chrome", headless=True, url=f"{base_url}/fields.html")
+    try:
+        title = h.handle("eval", {"expression": "() => document.title"})
+        assert title["ok"] is True and title["result"]["result"] == "fields fixture"
+        doubled = h.handle("eval", {"expression": "(x) => x * 2", "arg": 21})
+        assert doubled["result"]["result"] == 42
+    finally:
+        h.close()
+
+
+@pytest.mark.browser
+def test_handle_real_wait_visible(base_url: str) -> None:
+    h = session_server.SessionHandler(engine="chrome", headless=True, url=f"{base_url}/fields.html")
+    try:
+        ok = h.handle("wait", {"selector": "#topinput", "state": "visible", "timeout": 3000})
+        assert ok["ok"] is True and ok["result"] == "element is visible"
+        # A non-existent element must never become visible -> clean timeout error.
+        bad = h.handle("wait", {"selector": "#nope", "state": "visible", "timeout": 200})
+        assert bad["ok"] is False and "visible" in bad["error"]
+    finally:
+        h.close()
+
+
+@pytest.mark.browser
+def test_handle_real_expect_text(base_url: str) -> None:
+    h = session_server.SessionHandler(engine="chrome", headless=True, url=f"{base_url}/fields.html")
+    try:
+        ok = h.handle("expect_text", {"selector": "h1", "expected_text": "Fields"})
+        assert ok["ok"] is True and ok["result"] == "PASSED"
+        bad = h.handle(
+            "expect_text", {"selector": "h1", "expected_text": "Nope", "timeout": 300}
+        )
+        assert bad["ok"] is True and bad["result"].startswith("FAILED")
+    finally:
+        h.close()
+
+
+@pytest.mark.browser
+def test_handle_real_cookies_roundtrip(base_url: str) -> None:
+    h = session_server.SessionHandler(engine="chrome", headless=True, url=f"{base_url}/fields.html")
+    try:
+        h.handle("clear_cookies", {})
+        add = h.handle(
+            "add_cookies", {"cookies": [{"name": "vt", "value": "yes", "url": base_url}]}
+        )
+        assert add["ok"] is True and add["result"] == "added 1 cookie(s)"
+        got = h.handle("cookies", {})
+        assert got["ok"] is True and any(c["name"] == "vt" for c in got["result"]["cookies"])
+        cleared = h.handle("clear_cookies", {})
+        assert cleared["result"] == "cookies cleared"
+        assert h.handle("cookies", {})["result"]["cookies"] == []
+    finally:
+        h.close()
+
+
+@pytest.mark.browser
+def test_handle_real_tab_new_and_close(base_url: str) -> None:
+    h = session_server.SessionHandler(engine="chrome", headless=True, url=f"{base_url}/fields.html")
+    try:
+        new = h.handle("tab_new", {"url": f"{base_url}/index.html"})
+        assert new["ok"] is True
+        # The new tab is active and enumerable.
+        assert h.handle("url", {})["result"].endswith("index.html")
+        assert h.handle("tabs", {})["result"]["tabs"].__len__() == 2
+        closed = h.handle("tab_close", {})  # close the active (new) tab
+        assert closed["ok"] is True and closed["result"]["remaining"] == 1
+        # Back on the original tab.
+        assert h.handle("url", {})["result"].endswith("fields.html")
+    finally:
+        h.close()
+
+
+@pytest.mark.browser
+def test_handle_real_drag(base_url: str) -> None:
+    h = session_server.SessionHandler(engine="chrome", headless=True, url=f"{base_url}/fields.html")
+    try:
+        # Drag is a best-effort gesture; success here means no crash + ok:True.
+        resp = h.handle("drag", {"selector": "#btn", "target_selector": "#topinput"})
+        assert resp["ok"] is True and "dragged to" in resp["result"]
+    finally:
+        h.close()
+
+
 def test_cli_tabs_and_tab(monkeypatch: pytest.MonkeyPatch) -> None:
     captured: dict[str, Any] = {}
 
@@ -1287,3 +1940,85 @@ def test_dispatch_tabs_and_tab() -> None:
     assert "[0]" in console.dispatch("tabs", send)
     assert "switched to tab 0" in console.dispatch("tab 0", send)
     assert calls[-1] == ("tab", {"index": 0})
+
+
+# ---------------------------------------------------------------------------
+# console.dispatch — new verbs (fake send)
+# ---------------------------------------------------------------------------
+
+
+def _dispatch_send() -> tuple[list[tuple[str, dict[str, Any]]], Any]:
+    calls: list[tuple[str, dict[str, Any]]] = []
+
+    def send(op: str, args: dict[str, Any]) -> Any:
+        calls.append((op, args))
+        if op in ("back", "forward", "reload", "url", "title"):
+            return "http://dest"
+        if op == "snapshot":
+            return {"elements": [{"role": "button", "name": "Go"}]}
+        if op == "count":
+            return 2
+        if op == "cookies":
+            return {"cookies": [{"name": "sid", "value": "v", "domain": "d"}]}
+        if op == "eval":
+            return {"result": "RES"}
+        if op == "tab_new":
+            return {"index": 1, "title": "T"}
+        if op == "tab_close":
+            return {"closed": 1, "remaining": 1, "active": 0}
+        return "ok"
+
+    return calls, send
+
+
+def test_dispatch_navigation_and_inspect_verbs() -> None:
+    calls, send = _dispatch_send()
+    assert "went back to http://dest" in console.dispatch("back", send)
+    assert "went forward to http://dest" in console.dispatch("forward", send)
+    assert "reloaded http://dest" in console.dispatch("reload", send)
+    assert console.dispatch("title", send) == "http://dest"
+    assert console.dispatch("url", send) == "http://dest"
+    assert "button" in console.dispatch("snapshot", send)
+    assert [c[0] for c in calls] == ["back", "forward", "reload", "title", "url", "snapshot"]
+
+
+def test_dispatch_hover_dblclick_focus_clear_attr_count() -> None:
+    calls, send = _dispatch_send()
+    console.dispatch("hover 1", send)
+    console.dispatch("dblclick 2", send)
+    console.dispatch("focus 3", send)
+    console.dispatch("clear-input 6", send)
+    console.dispatch("attr href 4", send)
+    assert console.dispatch("count 5", send) == "2"
+    ops = [c[0] for c in calls]
+    assert ops == ["hover", "dblclick", "focus", "clear_input", "get_attribute", "count"]
+    assert calls[0][1] == {"index": 1}
+    assert calls[3][1] == {"index": 6}
+    assert calls[4][1] == {"index": 4, "attr_name": "href"}
+
+
+def test_dispatch_wait_and_expect() -> None:
+    calls, send = _dispatch_send()
+    console.dispatch("wait 0 hidden", send)
+    console.dispatch("expect 1 Welcome back", send)
+    assert calls[0] == ("wait", {"index": 0, "state": "hidden"})
+    assert calls[1] == ("expect_text", {"index": 1, "expected_text": "Welcome back"})
+
+
+def test_dispatch_cookies_eval_dialog() -> None:
+    calls, send = _dispatch_send()
+    assert "sid=v" in console.dispatch("cookies", send)
+    assert console.dispatch("eval () => 1", send) == "RES"
+    console.dispatch("dialog", send)
+    console.dispatch("dialog dismiss", send)
+    assert calls[1] == ("eval", {"expression": "() => 1"})
+    assert calls[2][1]["accept"] is True
+    assert calls[3][1]["accept"] is False
+
+
+def test_dispatch_tab_new_and_close() -> None:
+    calls, send = _dispatch_send()
+    assert "opened tab 1" in console.dispatch("tab-new http://x", send)
+    assert "closed tab 1" in console.dispatch("tab-close 1", send)
+    assert calls[0] == ("tab_new", {"url": "http://x"})
+    assert calls[1] == ("tab_close", {"index": 1})

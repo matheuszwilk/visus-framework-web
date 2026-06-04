@@ -422,12 +422,28 @@ def get_text(
 @app.command("session-screenshot")
 def session_screenshot(
     output: str = typer.Option("screenshot.png", "-o", "--output"),
+    full_page: bool = typer.Option(
+        False, "--full-page", help="Capture the full scrollable page, not just the viewport."
+    ),
+    index: int = typer.Argument(None, help="Field index to screenshot (omit = whole page)."),
+    selector: str = typer.Option(None, "--selector", "-s"),
+    role: str = typer.Option(None, "--role"),
+    name: str = typer.Option(None, "--name"),
+    text: str = typer.Option(None, "--text", help="Target an element by its visible text."),
 ) -> None:
-    """Screenshot the session's current page to a PNG file."""
+    """Screenshot the session's page (or a single element) to a PNG file.
+
+    With no target it captures the page (``--full-page`` for the whole scroll
+    height). Give an index or ``--selector``/``--role``/``--text`` to screenshot
+    just that element (mirrors the MCP ``browser_screenshot`` tool).
+    """
     # Resolve the path against the CLIENT's cwd (not the daemon's) so the PNG
     # lands where the user invoked the command, not under the daemon's base dir.
     abs_output = str(Path(output).resolve())
-    typer.echo(f"saved {_send('screenshot', {'path': abs_output})}")
+    args: dict[str, Any] = {"path": abs_output, "full_page": full_page}
+    if index is not None or selector or role or text:
+        args.update(_target_args(index, selector, role, name, text))
+    typer.echo(f"saved {_send('screenshot', args)}")
 
 
 @app.command("clear")
@@ -459,6 +475,423 @@ def tab(
     """Switch the session to a tab/window by index (or the newest if omitted)."""
     result = _send("tab", {"index": index})
     typer.echo(f"switched to tab {result['active']}: {str(result.get('title', ''))!r}")
+
+
+# ---------------------------------------------------------------------------
+# Navigation
+# ---------------------------------------------------------------------------
+
+
+@app.command()
+def back() -> None:
+    """Navigate back in the session's history."""
+    typer.echo(f"went back to {_send('back', {})}")
+
+
+@app.command()
+def forward() -> None:
+    """Navigate forward in the session's history."""
+    typer.echo(f"went forward to {_send('forward', {})}")
+
+
+@app.command()
+def reload() -> None:
+    """Reload the session's current page."""
+    typer.echo(f"reloaded {_send('reload', {})}")
+
+
+# ---------------------------------------------------------------------------
+# Inspect
+# ---------------------------------------------------------------------------
+
+
+@app.command()
+def title() -> None:
+    """Print the session page's title."""
+    typer.echo(_send("title", {}))
+
+
+@app.command()
+def url() -> None:
+    """Print the session page's current URL."""
+    typer.echo(_send("url", {}))
+
+
+@app.command()
+def snapshot(as_json: bool = typer.Option(False, "--json", help="Emit JSON.")) -> None:
+    """List the page's interactive elements as a role/name table."""
+    result = _send("snapshot", {})
+    elements = result.get("elements", [])
+    if as_json:
+        typer.echo(_json.dumps(elements, indent=2, ensure_ascii=False))
+        return
+    if not elements:
+        typer.echo("(no elements)")
+        return
+    from rich import box
+    from rich.console import Console
+    from rich.table import Table
+
+    table = Table(box=box.ASCII, header_style="bold", pad_edge=False)
+    table.add_column("ROLE", no_wrap=True)
+    table.add_column("NAME", overflow="fold")
+    for e in elements:
+        table.add_row(str(e.get("role", "")), str(e.get("name", "")))
+    console_obj = Console()
+    with console_obj.capture() as cap:
+        console_obj.print(table)
+    typer.echo(cap.get().rstrip("\n"))
+
+
+@app.command("get-attribute")
+def get_attribute(
+    attr_name: str = typer.Argument(..., help="Attribute name, e.g. `href`."),
+    index: int = typer.Argument(None, help="Field index from the last list-fields."),
+    selector: str = typer.Option(None, "--selector", "-s"),
+    role: str = typer.Option(None, "--role"),
+    name: str = typer.Option(None, "--name"),
+    text: str = typer.Option(None, "--text"),
+) -> None:
+    """Print an element's attribute value."""
+    args = _target_args(index, selector, role, name, text)
+    args["attr_name"] = attr_name
+    typer.echo(_send("get_attribute", args))
+
+
+@app.command()
+def count(
+    index: int = typer.Argument(None, help="Field index from the last list-fields."),
+    selector: str = typer.Option(None, "--selector", "-s"),
+    role: str = typer.Option(None, "--role"),
+    name: str = typer.Option(None, "--name"),
+    text: str = typer.Option(None, "--text"),
+) -> None:
+    """Print how many elements match the target."""
+    typer.echo(_send("count", _target_args(index, selector, role, name, text)))
+
+
+# ---------------------------------------------------------------------------
+# Actions
+# ---------------------------------------------------------------------------
+
+
+@app.command()
+def hover(
+    index: int = typer.Argument(None),
+    selector: str = typer.Option(None, "--selector", "-s"),
+    role: str = typer.Option(None, "--role"),
+    name: str = typer.Option(None, "--name"),
+    text: str = typer.Option(None, "--text"),
+) -> None:
+    """Hover over a field by index or by --selector/--role/--text."""
+    typer.echo(_send("hover", _target_args(index, selector, role, name, text)))
+
+
+@app.command()
+def dblclick(
+    index: int = typer.Argument(None),
+    selector: str = typer.Option(None, "--selector", "-s"),
+    role: str = typer.Option(None, "--role"),
+    name: str = typer.Option(None, "--name"),
+    text: str = typer.Option(None, "--text"),
+) -> None:
+    """Double-click a field by index or by --selector/--role/--text."""
+    typer.echo(_send("dblclick", _target_args(index, selector, role, name, text)))
+
+
+@app.command()
+def focus(
+    index: int = typer.Argument(None),
+    selector: str = typer.Option(None, "--selector", "-s"),
+    role: str = typer.Option(None, "--role"),
+    name: str = typer.Option(None, "--name"),
+    text: str = typer.Option(None, "--text"),
+) -> None:
+    """Focus a field by index or by --selector/--role/--text."""
+    typer.echo(_send("focus", _target_args(index, selector, role, name, text)))
+
+
+@app.command("clear-input")
+def clear_input(
+    index: int = typer.Argument(None),
+    selector: str = typer.Option(None, "--selector", "-s"),
+    role: str = typer.Option(None, "--role"),
+    name: str = typer.Option(None, "--name"),
+    text: str = typer.Option(None, "--text"),
+) -> None:
+    """Clear an input field's value (distinct from `clear`, which removes highlights)."""
+    typer.echo(_send("clear_input", _target_args(index, selector, role, name, text)))
+
+
+@app.command()
+def drag(
+    index: int = typer.Argument(None, help="Source field index from the last list-fields."),
+    target_index: int = typer.Argument(None, help="Target field index."),
+    selector: str = typer.Option(None, "--selector", "-s", help="Source selector."),
+    role: str = typer.Option(None, "--role"),
+    name: str = typer.Option(None, "--name"),
+    text: str = typer.Option(None, "--text"),
+    to_selector: str = typer.Option(None, "--to-selector", help="Target CSS/XPath selector."),
+    to_index: int = typer.Option(None, "--to-index", help="Target field index."),
+) -> None:
+    """Drag a source element onto a target. By index: `visus drag 3 7`."""
+    args = _target_args(index, selector, role, name, text)
+    if to_selector is not None:
+        args["target_selector"] = to_selector
+    elif to_index is not None:
+        args["target_index"] = to_index
+    elif target_index is not None:
+        args["target_index"] = target_index
+    else:
+        typer.echo("error: provide a drag target — `<target_index>`, --to-selector, or --to-index")
+        raise typer.Exit(1)
+    typer.echo(_send("drag", args))
+
+
+# Module-level singleton default (B008: a function call cannot be a mutable
+# list-typed default inline; reading it from a module variable is the fix).
+_UPLOAD_PATHS_ARG = typer.Argument(None, help="One or more file paths to upload.")
+
+
+@app.command()
+def upload(
+    index: int = typer.Argument(None, help="File-input field index from the last list-fields."),
+    paths: list[str] = _UPLOAD_PATHS_ARG,
+    selector: str = typer.Option(None, "--selector", "-s"),
+    role: str = typer.Option(None, "--role"),
+    name: str = typer.Option(None, "--name"),
+    text: str = typer.Option(None, "--text"),
+) -> None:
+    """Set file(s) on a file input. By index: `visus upload 4 a.png b.png`."""
+    if not paths:
+        typer.echo("error: provide at least one file path to upload")
+        raise typer.Exit(1)
+    args = _target_args(index, selector, role, name, text)
+    # Resolve paths against the CLIENT's cwd so the daemon receives absolute paths.
+    args["paths"] = [str(Path(p).resolve()) for p in paths]
+    typer.echo(_send("upload", args))
+
+
+# ---------------------------------------------------------------------------
+# Wait / Expect
+# ---------------------------------------------------------------------------
+
+
+@app.command()
+def wait(
+    index: int = typer.Argument(None),
+    selector: str = typer.Option(None, "--selector", "-s"),
+    role: str = typer.Option(None, "--role"),
+    name: str = typer.Option(None, "--name"),
+    text: str = typer.Option(None, "--text"),
+    state: str = typer.Option("visible", "--state", help="visible|hidden|attached|detached."),
+    timeout: int = typer.Option(None, "--timeout", help="Timeout in milliseconds."),
+) -> None:
+    """Wait for an element to reach a state (visible/hidden)."""
+    args = _target_args(index, selector, role, name, text)
+    args["state"] = state
+    if timeout is not None:
+        args["timeout"] = timeout
+    typer.echo(_send("wait", args))
+
+
+@app.command("expect-text")
+def expect_text(
+    index: int = typer.Argument(None, help="Field index from the last list-fields."),
+    expected: str = typer.Argument(None, help="The expected text."),
+    selector: str = typer.Option(None, "--selector", "-s"),
+    role: str = typer.Option(None, "--role"),
+    name: str = typer.Option(None, "--name"),
+    text: str = typer.Option(None, "--text"),
+    expected_text: str = typer.Option(
+        None, "--expected", help="Expected text when targeting by --selector/--role/--text."
+    ),
+    timeout: int = typer.Option(None, "--timeout", help="Timeout in milliseconds."),
+) -> None:
+    """Assert an element contains text (prints PASSED/FAILED). By index: `expect-text 0 Hi`."""
+    args = _target_args(index, selector, role, name, text)
+    want = expected if expected is not None else expected_text
+    if want is None:
+        typer.echo("error: no expected text — use `visus expect-text <index> <text>` or --expected")
+        raise typer.Exit(1)
+    args["expected_text"] = want
+    if timeout is not None:
+        args["timeout"] = timeout
+    typer.echo(_send("expect_text", args))
+
+
+# ---------------------------------------------------------------------------
+# Tabs (new / close)
+# ---------------------------------------------------------------------------
+
+
+@app.command("tab-new")
+def tab_new(
+    url: str = typer.Argument(None, help="Optional URL to open in the new tab."),
+) -> None:
+    """Open a new tab/window (optionally at URL) and switch the session to it."""
+    result = _send("tab_new", {"url": url})
+    typer.echo(f"opened tab {result['index']}: {str(result.get('title', ''))!r}")
+
+
+@app.command("tab-close")
+def tab_close(
+    index: int = typer.Argument(None, help="Tab index to close (omit = the active tab)."),
+) -> None:
+    """Close a tab/window by index (or the active one if omitted)."""
+    result = _send("tab_close", {"index": index})
+    if result.get("remaining", 0) == 0:
+        typer.echo("closed the last tab — session stopped")
+        return
+    typer.echo(f"closed tab {result['closed']} ({result['remaining']} remaining)")
+
+
+# ---------------------------------------------------------------------------
+# Dialogs
+# ---------------------------------------------------------------------------
+
+
+@app.command()
+def dialog(
+    accept: bool = typer.Option(
+        True, "--accept/--dismiss", help="Accept (default) or dismiss the dialog."
+    ),
+    prompt_text: str = typer.Option(None, "--prompt-text", help="Text for a prompt() dialog."),
+) -> None:
+    """Handle the next pending dialog (alert/confirm/prompt)."""
+    typer.echo(_send("dialog", {"accept": accept, "prompt_text": prompt_text}))
+
+
+# ---------------------------------------------------------------------------
+# Cookies
+# ---------------------------------------------------------------------------
+
+
+@app.command()
+def cookies(as_json: bool = typer.Option(False, "--json", help="Emit JSON.")) -> None:
+    """List all cookies for the session's context."""
+    result = _send("cookies", {})
+    items = result.get("cookies", [])
+    if as_json:
+        typer.echo(_json.dumps(items, indent=2, ensure_ascii=False))
+        return
+    if not items:
+        typer.echo("(no cookies)")
+        return
+    for c in items:
+        typer.echo(f"{c.get('name', '')}={c.get('value', '')}  ({c.get('domain', '')})")
+
+
+@app.command("add-cookies")
+def add_cookies(
+    cookies_json: str = typer.Argument(..., help='JSON list, e.g. \'[{"name":"a","value":"b","url":"http://x"}]\'.'),
+) -> None:
+    """Add cookies from a JSON list to the session's context."""
+    try:
+        parsed = _json.loads(cookies_json)
+    except _json.JSONDecodeError as exc:
+        typer.echo(f"error: invalid JSON — {exc}")
+        raise typer.Exit(1) from exc
+    if not isinstance(parsed, list):
+        typer.echo("error: expected a JSON list of cookie objects")
+        raise typer.Exit(1)
+    typer.echo(_send("add_cookies", {"cookies": parsed}))
+
+
+@app.command("clear-cookies")
+def clear_cookies() -> None:
+    """Clear all cookies in the session's context."""
+    typer.echo(_send("clear_cookies", {}))
+
+
+# ---------------------------------------------------------------------------
+# JavaScript
+# ---------------------------------------------------------------------------
+
+
+@app.command("eval")
+def eval_js(
+    expression: str = typer.Argument(..., help="A JS function, e.g. '() => document.title'."),
+    arg: str = typer.Argument(None, help="Optional JSON argument passed to the function."),
+    as_json: bool = typer.Option(False, "--json", help="Emit the result as JSON."),
+) -> None:
+    """Evaluate a JavaScript expression in the page and print the result."""
+    parsed_arg: Any = None
+    if arg is not None:
+        try:
+            parsed_arg = _json.loads(arg)
+        except _json.JSONDecodeError:
+            parsed_arg = arg  # treat as a plain string when not valid JSON
+    result = _send("eval", {"expression": expression, "arg": parsed_arg})
+    value = result.get("result")
+    if as_json:
+        typer.echo(_json.dumps(value, indent=2, ensure_ascii=False))
+        return
+    typer.echo(value)
+
+
+# ---------------------------------------------------------------------------
+# Vision (requires the [vision] extra)
+# ---------------------------------------------------------------------------
+
+
+@app.command("read-text")
+def read_text(
+    index: int = typer.Argument(None),
+    selector: str = typer.Option(None, "--selector", "-s"),
+    role: str = typer.Option(None, "--role"),
+    name: str = typer.Option(None, "--name"),
+    text: str = typer.Option(None, "--text"),
+) -> None:
+    """OCR the targeted element's screenshot and print the recognized text."""
+    typer.echo(_send("read_text", _target_args(index, selector, role, name, text)))
+
+
+@app.command("solve-captcha")
+def solve_captcha(
+    index: int = typer.Argument(None),
+    selector: str = typer.Option(None, "--selector", "-s"),
+    role: str = typer.Option(None, "--role"),
+    name: str = typer.Option(None, "--name"),
+    text: str = typer.Option(None, "--text"),
+) -> None:
+    """OCR-solve a text CAPTCHA in the targeted element and print the solution."""
+    typer.echo(_send("solve_captcha", _target_args(index, selector, role, name, text)))
+
+
+@app.command("find-image")
+def find_image(
+    template: str = typer.Argument(..., help="Path to the template PNG to search for."),
+    index: int = typer.Argument(None, help="Optional field index to scope the search."),
+    selector: str = typer.Option(None, "--selector", "-s"),
+    role: str = typer.Option(None, "--role"),
+    name: str = typer.Option(None, "--name"),
+    text: str = typer.Option(None, "--text"),
+    confidence: float = typer.Option(0.8, "--confidence", "-c", help="Match threshold (0-1)."),
+    as_json: bool = typer.Option(False, "--json", help="Emit JSON."),
+) -> None:
+    """Find a template image inside the page (or a targeted element)."""
+    args: dict[str, Any] = {
+        "template_path": str(Path(template).resolve()),
+        "confidence": confidence,
+    }
+    if index is not None:
+        args["index"] = index
+    if selector or role or text:
+        args["selector"] = selector
+        args["role"] = role
+        args["name"] = name
+        args["target_text"] = text
+    result = _send("find_image", args)
+    if as_json:
+        typer.echo(_json.dumps(result, indent=2, ensure_ascii=False))
+        return
+    if result.get("found"):
+        typer.echo(
+            f"found at ({result['x']}, {result['y']}) confidence={result['confidence']:.3f}"
+        )
+    else:
+        typer.echo("not found")
 
 
 @app.command()

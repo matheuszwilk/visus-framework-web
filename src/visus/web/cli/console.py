@@ -24,12 +24,31 @@ _HELP = """commands:
   uncheck N            uncheck field N
   select N value       select option `value` on field N
   press N key          press key on field N
+  hover N              hover over field N
+  dblclick N           double-click field N
+  focus N              focus field N
+  clear-input N        clear field N's value
   goto url             navigate to url
+  back                 navigate back in history
+  forward              navigate forward in history
+  reload               reload the current page
+  title                print the page title
+  url                  print the current URL
+  snapshot             list interactive elements (role/name)
   text N               print field N's text content
+  attr name N          print field N's `name` attribute
+  count N              count elements matching field N
+  wait N [state]       wait until field N is visible/hidden
+  expect N text...     assert field N contains text (PASSED/FAILED)
+  cookies              list cookies for the context
+  eval expr            evaluate a JS expression
+  dialog [dismiss]     handle the next dialog (accept by default)
   screenshot [path]    save a screenshot (default screenshot.png)
   clear                remove the field highlight overlay
   tabs                 list open tabs/windows (active marked *)
   tab N                switch to tab/window N (omit N = newest)
+  tab-new [url]        open a new tab (optionally at url)
+  tab-close [N]        close tab N (omit N = active)
   help                 show this help
   quit                 exit the console (the session stays alive)"""
 
@@ -109,10 +128,61 @@ def dispatch(line: str, send: SendFn) -> str:
             return str(send("select", {**_idx(rest[0]), "value": " ".join(rest[1:])}))
         if cmd == "press":
             return str(send("press", {**_idx(rest[0]), "key": " ".join(rest[1:])}))
+        if cmd == "hover":
+            return str(send("hover", _idx(rest[0])))
+        if cmd == "dblclick":
+            return str(send("dblclick", _idx(rest[0])))
+        if cmd == "focus":
+            return str(send("focus", _idx(rest[0])))
+        if cmd == "clear-input":
+            return str(send("clear_input", _idx(rest[0])))
         if cmd == "goto":
             return f"navigated to {send('goto', {'url': rest[0]})}"
+        if cmd == "back":
+            return f"went back to {send('back', {})}"
+        if cmd == "forward":
+            return f"went forward to {send('forward', {})}"
+        if cmd == "reload":
+            return f"reloaded {send('reload', {})}"
+        if cmd == "title":
+            return str(send("title", {}))
+        if cmd == "url":
+            return str(send("url", {}))
+        if cmd == "snapshot":
+            elements = send("snapshot", {}).get("elements", [])
+            if not elements:
+                return "(no elements)"
+            return "\n".join(
+                f"{str(e.get('role', '')):16} {e.get('name', '')}" for e in elements
+            )
         if cmd in ("text", "get-text"):
             return str(send("get_text", _idx(rest[0])))
+        if cmd in ("attr", "get-attribute"):
+            return str(send("get_attribute", {**_idx(rest[1]), "attr_name": rest[0]}))
+        if cmd == "count":
+            return str(send("count", _idx(rest[0])))
+        if cmd == "wait":
+            args: dict[str, Any] = _idx(rest[0])
+            if len(rest) > 1:
+                args["state"] = rest[1]
+            return str(send("wait", args))
+        if cmd in ("expect", "expect-text"):
+            return str(
+                send("expect_text", {**_idx(rest[0]), "expected_text": " ".join(rest[1:])})
+            )
+        if cmd == "cookies":
+            items = send("cookies", {}).get("cookies", [])
+            if not items:
+                return "(no cookies)"
+            return "\n".join(
+                f"{c.get('name', '')}={c.get('value', '')}  ({c.get('domain', '')})"
+                for c in items
+            )
+        if cmd == "eval":
+            return str(send("eval", {"expression": " ".join(rest)}).get("result"))
+        if cmd == "dialog":
+            accept = not (rest and rest[0].lower() in ("dismiss", "cancel", "no"))
+            return str(send("dialog", {"accept": accept, "prompt_text": None}))
         if cmd == "screenshot":
             args = {"path": rest[0]} if rest else {}
             return f"saved {send('screenshot', args)}"
@@ -130,6 +200,14 @@ def dispatch(line: str, send: SendFn) -> str:
         if cmd == "tab":
             r = send("tab", {"index": int(rest[0]) if rest else None})
             return f"switched to tab {r['active']}: {str(r.get('title', ''))!r}"
+        if cmd == "tab-new":
+            r = send("tab_new", {"url": rest[0] if rest else None})
+            return f"opened tab {r['index']}: {str(r.get('title', ''))!r}"
+        if cmd == "tab-close":
+            r = send("tab_close", {"index": int(rest[0]) if rest else None})
+            if r.get("remaining", 0) == 0:
+                return "closed the last tab — session stopped"
+            return f"closed tab {r['closed']} ({r['remaining']} remaining)"
         return f"unknown command {cmd!r} (try `help`)"
     except IndexError:
         return f"missing argument for `{cmd}` (try `help`)"
