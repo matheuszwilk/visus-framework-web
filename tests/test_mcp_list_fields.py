@@ -89,3 +89,24 @@ def test_clear_highlights_returns_cleared(srv):  # type: ignore[no-untyped-def]
     # Drawing the overlay (headless no-op) then clearing must not raise.
     server.browser_list_fields(highlight=True)
     assert server.browser_clear_highlights() == "cleared"
+
+
+@pytest.mark.browser
+def test_set_tab_follow_manual_default_vs_auto(srv):  # type: ignore[no-untyped-def]
+    server, _ = srv
+    server.browser_navigate("data:text/html,<title>ONE</title>")
+    driver = server._session.page()._delegate._driver  # type: ignore[attr-defined]
+    driver.switch_to.new_window("tab")
+    driver.get("data:text/html,<title>TWO</title>")
+
+    # MANUAL (default): a newly-opened tab does NOT change the active context.
+    assert server.browser_set_tab_follow(False) == "tab-follow disabled (manual)"
+    assert server.browser_title() == "ONE"
+
+    # AUTO-FOLLOW: operations target the newest tab.
+    assert server.browser_set_tab_follow(True) == "tab-follow enabled (auto)"
+    assert server.browser_title() == "TWO"
+
+    # Back to MANUAL returns to the explicit page.
+    server.browser_set_tab_follow(False)
+    assert server.browser_title() == "ONE"

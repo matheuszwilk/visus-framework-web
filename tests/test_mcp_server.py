@@ -61,6 +61,7 @@ _EXPECTED_TOOLS = [
     "browser_tab_new",
     "browser_tab_select",
     "browser_tab_close",
+    "browser_set_tab_follow",
     # Dialogs
     "browser_handle_dialog",
     # Cookies

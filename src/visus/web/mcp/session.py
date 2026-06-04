@@ -10,6 +10,7 @@ from visus.web.api.browser import Browser
 from visus.web.api.context import Context
 from visus.web.api.locator import Locator
 from visus.web.api.page import Page
+from visus.web.backends.selenium.driver_delegate import SeleniumPageDelegate
 
 
 class Session:
@@ -20,6 +21,13 @@ class Session:
         self._context: Context | None = None
         self._pages: list[Page] = []
         self._current_idx: int = 0
+        # Tab-follow mode (opt-in). Manual by default: a click that opens a new
+        # tab/popup does NOT silently change the active context — the agent steers
+        # with tab_list/tab_select (predictable). When enabled, page() auto-follows
+        # the most recently opened window/tab (like the CLI daemon).
+        self._follow: bool = False
+        self._known_handles: list[str] = []
+        self._active_handle: str | None = None
 
     def _ensure(self) -> None:
         if self._browser is None:
@@ -33,7 +41,34 @@ class Session:
 
     def page(self) -> Page:
         self._ensure()
-        return self._pages[self._current_idx]
+        base = self._pages[self._current_idx]
+        if not self._follow:
+            return base  # manual (default): explicit tab control via tab_select
+        driver = getattr(getattr(base, "_delegate", None), "_driver", None)
+        if driver is None:
+            return base
+        try:
+            handles = list(driver.window_handles)
+        except Exception:  # noqa: BLE001
+            return base
+        if not handles:
+            return base
+        new = [h for h in handles if h not in self._known_handles]
+        self._known_handles = list(handles)
+        active = new[-1] if new else self._active_handle  # follow the newest new tab/popup
+        if active is None or active not in handles:
+            active = handles[-1]
+        self._active_handle = active
+        if getattr(base._delegate, "_handle", None) == active:
+            return base
+        return Page(SeleniumPageDelegate(driver, active), base._defaults)
+
+    def set_follow(self, enabled: bool) -> bool:
+        """Toggle auto-follow of newly-opened tabs/popups (default off = manual)."""
+        self._follow = bool(enabled)
+        if not self._follow:
+            self._active_handle = None
+        return self._follow
 
     def context(self) -> Context:
         self._ensure()
@@ -81,6 +116,9 @@ class Session:
         self._context = None
         self._pages = []
         self._current_idx = 0
+        self._follow = False
+        self._known_handles = []
+        self._active_handle = None
 
 
 def make_locator(

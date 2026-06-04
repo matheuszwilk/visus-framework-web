@@ -510,6 +510,22 @@ def browser_tab_close(index: int | None = None) -> str:
     return f"closed tab {idx if idx is not None else 'current'}"
 
 
+@mcp.tool()
+def browser_set_tab_follow(enabled: bool) -> str:
+    """Choose how new tabs/popups are handled — the agent picks the mode.
+
+    enabled=False (DEFAULT, recommended): MANUAL. A click that opens a new
+    tab/popup does NOT change your context; you stay where you are and steer
+    explicitly with browser_tab_list / browser_tab_select. Predictable — no
+    silent context switches.
+
+    enabled=True: AUTO-FOLLOW. Subsequent operations target the most recently
+    opened tab/popup window automatically (handy for "open in new tab" flows).
+    """
+    on = _session.set_follow(enabled)
+    return f"tab-follow {'enabled (auto)' if on else 'disabled (manual)'}"
+
+
 # ---------------------------------------------------------------------------
 # Dialogs
 # ---------------------------------------------------------------------------
