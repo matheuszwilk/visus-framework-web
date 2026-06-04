@@ -113,8 +113,12 @@
   }
 
   function isVisible(el) {
-    if (!(el instanceof Element)) return false;
-    var style = getComputedStyle(el);
+    // Cross-realm safe: elements collected from an iframe's contentDocument belong
+    // to that iframe's realm, so `el instanceof Element` (top realm) is false for
+    // them. Duck-type on nodeType and use the element's own view for getComputedStyle.
+    if (!el || el.nodeType !== 1) return false;
+    var view = (el.ownerDocument && el.ownerDocument.defaultView) || window;
+    var style = view.getComputedStyle(el);
     if (style.visibility === "hidden" || style.display === "none") return false;
     var r = el.getBoundingClientRect();
     return r.width > 0 && r.height > 0;
@@ -210,6 +214,22 @@
     });
   }
 
+  // Recursive shadow-aware querySelectorAll: collects matches in `base` and in
+  // every open shadow root reachable from it (feature-detected `shadowRoot`).
+  function deepQuerySelectorAll(base, selector, acc) {
+    var i, matches;
+    try {
+      matches = base.querySelectorAll(selector);
+      for (i = 0; i < matches.length; i++) acc.push(matches[i]);
+    } catch (qErr) { /* malformed selector against this root */ }
+    var hosts = base.querySelectorAll("*");
+    for (i = 0; i < hosts.length; i++) {
+      var sr = hosts[i].shadowRoot;
+      if (sr) deepQuerySelectorAll(sr, selector, acc);
+    }
+    return acc;
+  }
+
   function queryAll(stepsJson) {
     var steps = (typeof stepsJson === "string") ? JSON.parse(stepsJson) : stepsJson;
     var current = null; // null => root is document
@@ -221,7 +241,11 @@
       if (step.kind === "css") {
         for (r = 0; r < roots.length; r++) {
           base = roots[r];
-          out.push.apply(out, base.querySelectorAll(step.value));
+          if (step.deep) {
+            deepQuerySelectorAll(base, step.value, out);
+          } else {
+            out.push.apply(out, base.querySelectorAll(step.value));
+          }
         }
       } else if (step.kind === "xpath") {
         for (r = 0; r < roots.length; r++) {
@@ -290,11 +314,18 @@
         for (var sc = 0; sc < step.candidates.length; sc++) {
           var cand = step.candidates[sc];
           var sFound = [];
+          // A deep step/candidate must pierce shadow roots even on the smart fallback,
+          // otherwise shadow-DOM fields bestLocator marked deep cannot be re-resolved.
+          var sDeep = step.deep || cand.deep;
           for (r = 0; r < roots.length; r++) {
             base = roots[r];
             try {
               if (cand.css != null) {
-                sFound.push.apply(sFound, base.querySelectorAll(cand.css));
+                if (sDeep) {
+                  deepQuerySelectorAll(base, cand.css, sFound);
+                } else {
+                  sFound.push.apply(sFound, base.querySelectorAll(cand.css));
+                }
               } else if (cand.xpath != null) {
                 var sCtx = (base === document) ? document : base;
                 var sRes = document.evaluate(cand.xpath, sCtx, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
@@ -369,6 +400,423 @@
     for (var i = 0; i < n.length; i++) n[i].parentNode.removeChild(n[i]);
   }
 
+  // ------------------------------------------------------------------
+  // Field enumeration (window.__visus.listFields)
+  // ------------------------------------------------------------------
+
+  // Roles considered interactive "fields" for enumeration.
+  var FIELD_ROLES = {
+    "button": true, "link": true, "textbox": true, "searchbox": true,
+    "combobox": true, "listbox": true, "checkbox": true, "radio": true,
+    "switch": true, "slider": true, "spinbutton": true, "menuitem": true,
+    "menuitemcheckbox": true, "menuitemradio": true, "option": true, "tab": true,
+    "treeitem": true,
+  };
+  // ARIA values of aria-haspopup that indicate a custom dropdown trigger.
+  var HASPOPUP_DROPDOWN = {
+    "listbox": true, "menu": true, "tree": true, "grid": true, "dialog": true, "true": true,
+  };
+
+  function cssEscape(s) {
+    if (window.CSS && CSS.escape) return CSS.escape(s);
+    // Minimal fallback: escape characters that are unsafe in a CSS identifier.
+    return String(s).replace(/([^\w-])/g, "\\$1");
+  }
+  function cssAttrValue(s) {
+    return String(s).replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+  }
+
+  // Map a native control / computed role to a coarse field `kind`.
+  function fieldKind(el, role) {
+    var tag = el.tagName.toLowerCase();
+    var type = (el.getAttribute && (el.getAttribute("type") || "").toLowerCase()) || "";
+    if (tag === "textarea") return "textarea";
+    if (tag === "select") return "select";
+    if (tag === "a" && el.hasAttribute("href")) return "link";
+    if (tag === "button") return "button";
+    if (tag === "input") {
+      if (type === "checkbox") return "checkbox";
+      if (type === "radio") return "radio";
+      if (type === "button" || type === "submit" || type === "reset" || type === "image") {
+        return "button";
+      }
+      return "input";
+    }
+    // role-driven classification for custom widgets / contenteditable
+    if (role === "button") return "button";
+    if (role === "link") return "link";
+    if (role === "checkbox" || role === "switch" || role === "menuitemcheckbox") return "checkbox";
+    if (role === "radio" || role === "menuitemradio") return "radio";
+    if (role === "combobox" || role === "listbox") return "dropdown";
+    if (role === "textbox" || role === "searchbox") {
+      return el.isContentEditable ? "editable" : "input";
+    }
+    if (el.isContentEditable) return "editable";
+    return "other";
+  }
+
+  // True if `el` qualifies as an enumerable field (native control or interactive role).
+  function isFieldCandidate(el) {
+    var tag = el.tagName.toLowerCase();
+    var type = (el.getAttribute && (el.getAttribute("type") || "").toLowerCase()) || "";
+    if (tag === "input" && type !== "hidden") return true;
+    if (tag === "textarea" || tag === "select" || tag === "button") return true;
+    if (tag === "a" && el.hasAttribute("href")) return true;
+    if (el.isContentEditable) return true;
+    if (el.getAttribute && el.getAttribute("contenteditable") != null
+        && el.getAttribute("contenteditable") !== "false") return true;
+    var role = computeRole(el);
+    if (role && FIELD_ROLES[role]) return true;
+    var hp = el.getAttribute && el.getAttribute("aria-haspopup");
+    if (hp && HASPOPUP_DROPDOWN[hp.toLowerCase()]) return true;
+    return false;
+  }
+
+  // Build a ready-to-use locator step list (and a human string) for `el`, mirroring
+  // the _htmlsel.py ranking: id -> testid -> name -> aria-label -> role+name ->
+  // minimal CSS -> smart. `deep` marks shadow-DOM css steps so the resolver pierces.
+  var TEST_HOOKS = ["data-testid", "data-test", "data-test-id", "data-qa", "data-cy"];
+  function bestLocator(el, deep) {
+    var tag = el.tagName.toLowerCase();
+    var k, v, css = null, kind = null;
+    var id = el.getAttribute && el.getAttribute("id");
+    if (id) { css = "#" + cssEscape(id); kind = "css"; }
+    if (css === null) {
+      for (k = 0; k < TEST_HOOKS.length; k++) {
+        v = el.getAttribute && el.getAttribute(TEST_HOOKS[k]);
+        if (v) { css = "[" + TEST_HOOKS[k] + '="' + cssAttrValue(v) + '"]'; kind = "testid"; break; }
+      }
+    }
+    if (css === null) {
+      v = el.getAttribute && el.getAttribute("name");
+      if (v) { css = tag + '[name="' + cssAttrValue(v) + '"]'; kind = "name"; }
+    }
+    if (css === null) {
+      v = el.getAttribute && el.getAttribute("aria-label");
+      if (v && v.trim()) { css = '[aria-label="' + cssAttrValue(v) + '"]'; kind = "label"; }
+    }
+    if (css === null) {
+      // role + accessible-name (expressed as a role step the engine understands)
+      var role = computeRole(el);
+      var nm = accessibleName(el);
+      if (role && nm) {
+        return {
+          steps: [{ kind: "role", role: role, name: nm, exact: true }],
+          locator: "role=" + role + "[name=\"" + nm + "\"]",
+          locator_kind: "role",
+        };
+      }
+    }
+    if (css === null) {
+      // minimal CSS: tag + classes (escaped), else a smart candidate list
+      var classes = (el.getAttribute && el.getAttribute("class") || "").split(/\s+/);
+      var sel = tag, c;
+      for (c = 0; c < classes.length; c++) {
+        if (classes[c]) sel += "." + cssEscape(classes[c]);
+      }
+      if (sel !== tag) { css = sel; kind = "css"; }
+    }
+    if (css === null) {
+      // smart fallback: a couple of identifying attributes, else bare tag
+      var cands = [], attrs = ["type", "role", "placeholder", "href"], a, av;
+      var base = tag;
+      for (a = 0; a < attrs.length; a++) {
+        av = el.getAttribute && el.getAttribute(attrs[a]);
+        if (av) base += "[" + attrs[a] + '="' + cssAttrValue(av) + '"]';
+      }
+      cands.push({ css: base });
+      return {
+        steps: [{ kind: "smart", tag: tag, candidates: cands, deep: deep }],
+        locator: base,
+        locator_kind: "smart",
+      };
+    }
+    var step = { kind: "css", value: css };
+    if (deep) step.deep = true;
+    return { steps: [step], locator: css, locator_kind: kind };
+  }
+
+  // A resolvable CSS selector path for `el` within its OWN root (document, open
+  // shadow root, or iframe document). Prefers an #id anchor; else an
+  // :nth-of-type path up to the nearest ancestor id / root.
+  function cssPath(el) {
+    if (!el || el.nodeType !== 1) return "";
+    var id = el.getAttribute && el.getAttribute("id");
+    if (id) return "#" + cssEscape(id);
+    var parts = [], node = el, seg, pid, parent, s, sib, sameTag, idx;
+    while (node && node.nodeType === 1) {
+      seg = node.tagName.toLowerCase();
+      pid = node.getAttribute && node.getAttribute("id");
+      if (pid && node !== el) { parts.unshift("#" + cssEscape(pid)); break; }
+      parent = node.parentNode;
+      if (parent && parent.children && parent.children.length) {
+        sameTag = 0; idx = 0;
+        for (s = 0; s < parent.children.length; s++) {
+          sib = parent.children[s];
+          if (sib.tagName === node.tagName) {
+            sameTag++;
+            if (sib === node) idx = sameTag;
+          }
+        }
+        if (sameTag > 1) seg += ":nth-of-type(" + idx + ")";
+      }
+      parts.unshift(seg);
+      node = node.parentNode;
+      if (!node || node.nodeType !== 1) break;
+    }
+    return parts.join(" > ");
+  }
+
+  // An XPath for `el` within its OWN root. Prefers //*[@id="..."]; else an
+  // absolute positional path.
+  function xPath(el) {
+    if (!el || el.nodeType !== 1) return "";
+    var id = el.getAttribute && el.getAttribute("id");
+    if (id) return '//*[@id="' + id + '"]';
+    var parts = [], node = el, tag, parent, idx, count, s, sib;
+    while (node && node.nodeType === 1) {
+      tag = node.tagName.toLowerCase();
+      parent = node.parentNode;
+      idx = 1;
+      if (parent && parent.children && parent.children.length) {
+        count = 0;
+        for (s = 0; s < parent.children.length; s++) {
+          sib = parent.children[s];
+          if (sib.tagName === node.tagName) {
+            count++;
+            if (sib === node) { idx = count; break; }
+          }
+        }
+      }
+      parts.unshift(tag + "[" + idx + "]");
+      node = parent;
+      if (!node || node.nodeType !== 1) break;
+    }
+    return "/" + parts.join("/");
+  }
+
+  // Depth-first collection of field descriptors across the main document, open
+  // shadow roots, and same-origin iframes. `frameChain` is the CSS selector chain
+  // of iframes traversed to reach `root`; `inShadow` marks shadow-DOM context.
+  function collectFields(root, frameChain, inShadow, includeHidden, kinds, acc) {
+    var all;
+    try {
+      all = root.querySelectorAll("*");
+    } catch (qErr) { return; }
+    var i, el, sr, kind, role, visible, disabled;
+    for (i = 0; i < all.length; i++) {
+      el = all[i];
+      if (isFieldCandidate(el)) {
+        role = computeRole(el);
+        kind = fieldKind(el, role);
+        // custom dropdown trigger overrides a generic role classification
+        var hp = el.getAttribute && el.getAttribute("aria-haspopup");
+        if (hp && HASPOPUP_DROPDOWN[hp.toLowerCase()]) kind = "dropdown";
+        if (!kinds || kinds.indexOf(kind) >= 0) {
+          visible = isVisible(el);
+          disabled = isDisabled(el);
+          if (includeHidden || (visible && !disabled)) {
+            var loc = bestLocator(el, inShadow);
+            var rect = el.getBoundingClientRect();
+            var type = el.getAttribute && el.getAttribute("type");
+            var checked = (typeof el.checked === "boolean") ? el.checked
+              : (el.getAttribute && el.getAttribute("aria-checked") === "true" ? true : null);
+            acc.push({
+              el: el,
+              descriptor: {
+                index: -1,
+                kind: kind,
+                tag: el.tagName.toLowerCase(),
+                type: type || null,
+                role: role || null,
+                name: accessibleName(el),
+                label: labelText(el) || null,
+                placeholder: (el.getAttribute && el.getAttribute("placeholder")) || null,
+                value: (typeof el.value === "string") ? el.value : null,
+                checked: checked,
+                disabled: disabled,
+                visible: visible,
+                frame: frameChain.slice(),
+                shadow: inShadow,
+                locator: loc.locator,
+                locator_kind: loc.locator_kind,
+                css: cssPath(el),
+                xpath: xPath(el),
+                deep: !!inShadow,
+                steps: loc.steps,
+                rect: { x: rect.left, y: rect.top, w: rect.width, h: rect.height },
+                frameChain: frameChain.slice(),
+                inShadow: inShadow,
+              },
+            });
+          }
+        }
+      }
+      // recurse into an open shadow root (feature-detected)
+      sr = el.shadowRoot;
+      if (sr) collectFields(sr, frameChain, true, includeHidden, kinds, acc);
+      // recurse into same-origin iframes
+      if (el.tagName === "IFRAME") {
+        var doc = null;
+        try { doc = el.contentDocument; } catch (xErr) { doc = null; }
+        if (doc) {
+          collectFields(doc, frameChain.concat([iframeSelector(el)]), inShadow,
+            includeHidden, kinds, acc);
+        }
+      }
+    }
+  }
+
+  // A CSS selector that identifies an iframe within its parent document, for the
+  // Python-side frame switcher (resolver.py keys off this chain).
+  function iframeSelector(el) {
+    var id = el.getAttribute("id");
+    if (id) return "#" + cssEscape(id);
+    var name = el.getAttribute("name");
+    if (name) return 'iframe[name="' + cssAttrValue(name) + '"]';
+    var src = el.getAttribute("src");
+    if (src) return 'iframe[src="' + cssAttrValue(src) + '"]';
+    return "iframe";
+  }
+
+  function listFields(opts) {
+    opts = opts || {};
+    var kinds = opts.kinds || null;
+    var includeHidden = !!opts.includeHidden;
+    var acc = [];
+    collectFields(document, [], false, includeHidden, kinds, acc);
+    // dedup by element (most specific kind already chosen per element), assign indices
+    var seen = [], out = [], i, item;
+    for (i = 0; i < acc.length; i++) {
+      item = acc[i];
+      if (seen.indexOf(item.el) < 0) {
+        seen.push(item.el);
+        item.descriptor.index = out.length;
+        out.push(item.descriptor);
+      }
+    }
+    return out;
+  }
+
+  // ------------------------------------------------------------------
+  // Numbered field highlight (window.__visus.highlightFields / clearHighlights)
+  // ------------------------------------------------------------------
+
+  var KIND_COLORS = {
+    "input": "#2563eb", "textarea": "#2563eb", "editable": "#2563eb",
+    "button": "#16a34a", "link": "#9333ea",
+    "checkbox": "#ea580c", "radio": "#ea580c",
+    "select": "#0d9488", "dropdown": "#0d9488",
+  };
+  function kindColor(kind) {
+    return KIND_COLORS[kind] || "#6b7280";
+  }
+
+  var _fieldOverlay = { nodes: [], items: null, onScroll: null, raf: 0, scrollX: 0, scrollY: 0 };
+
+  // Absolute (document-relative) rect for a field, adding same-origin iframe offsets.
+  // The viewport rect in `item.rect` is FROZEN at capture time; the boxes are
+  // position:absolute (document coordinates), so the document offset must be baked
+  // ONCE using the scroll position present when listFields ran. Re-adding the LIVE
+  // window.pageXOffset/pageYOffset on every reposition would drift every box by the
+  // scroll delta on scroll. We therefore use the captured scroll offset constant.
+  function absoluteRect(item) {
+    var x = item.rect.x, y = item.rect.y;
+    var chain = item.frameChain || [];
+    var doc = document, j;
+    for (j = 0; j < chain.length; j++) {
+      var fr = doc.querySelector(chain[j]);
+      if (!fr) break;
+      var fb = fr.getBoundingClientRect();
+      x += fb.left;
+      y += fb.top;
+      try { doc = fr.contentDocument || doc; } catch (e) { /* cross-origin */ }
+    }
+    return {
+      left: x + _fieldOverlay.scrollX,
+      top: y + _fieldOverlay.scrollY,
+      w: item.rect.w,
+      h: item.rect.h,
+    };
+  }
+
+  function renderFieldOverlay() {
+    clearOverlayNodes();
+    var items = _fieldOverlay.items;
+    if (!items || !items.length) return;
+    var body = document.body || document.documentElement;
+    var i;
+    for (i = 0; i < items.length; i++) {
+      var it = items[i];
+      if (!it.rect || (it.rect.w <= 0 && it.rect.h <= 0)) continue;
+      var ar = absoluteRect(it);
+      var color = kindColor(it.kind);
+      var box = document.createElement("div");
+      box.setAttribute("data-visus-field", "1");
+      box.style.cssText =
+        "position:absolute;z-index:2147483646;pointer-events:none;box-sizing:border-box;" +
+        "border:2px solid " + color + ";border-radius:2px;" +
+        "left:" + ar.left + "px;top:" + ar.top + "px;" +
+        "width:" + ar.w + "px;height:" + ar.h + "px;";
+      var badge = document.createElement("div");
+      badge.setAttribute("data-visus-field", "1");
+      badge.appendChild(document.createTextNode(String(it.index)));
+      badge.style.cssText =
+        "position:absolute;z-index:2147483647;pointer-events:none;" +
+        "font:bold 11px/14px sans-serif;color:#fff;background:" + color + ";" +
+        "padding:0 4px;border-radius:2px;min-width:14px;text-align:center;" +
+        "left:" + ar.left + "px;top:" + Math.max(0, ar.top - 14) + "px;";
+      body.appendChild(box);
+      body.appendChild(badge);
+      _fieldOverlay.nodes.push(box);
+      _fieldOverlay.nodes.push(badge);
+    }
+  }
+
+  function clearOverlayNodes() {
+    var n = document.querySelectorAll("[data-visus-field]");
+    for (var i = 0; i < n.length; i++) {
+      if (n[i].parentNode) n[i].parentNode.removeChild(n[i]);
+    }
+    _fieldOverlay.nodes = [];
+  }
+
+  function scheduleReposition() {
+    if (_fieldOverlay.raf) return;
+    _fieldOverlay.raf = requestAnimationFrame(function () {
+      _fieldOverlay.raf = 0;
+      renderFieldOverlay();
+    });
+  }
+
+  function highlightFields(list) {
+    clearHighlights();
+    if (!list || !list.length) return;
+    _fieldOverlay.items = list;
+    // Bake the document offset present at capture time so absolute boxes stay pinned
+    // to the document on scroll (re-adding the live offset on reposition would drift).
+    _fieldOverlay.scrollX = window.pageXOffset || 0;
+    _fieldOverlay.scrollY = window.pageYOffset || 0;
+    renderFieldOverlay();
+    _fieldOverlay.onScroll = function () { scheduleReposition(); };
+    window.addEventListener("scroll", _fieldOverlay.onScroll, true);
+    window.addEventListener("resize", _fieldOverlay.onScroll, true);
+  }
+
+  function clearHighlights() {
+    if (_fieldOverlay.onScroll) {
+      window.removeEventListener("scroll", _fieldOverlay.onScroll, true);
+      window.removeEventListener("resize", _fieldOverlay.onScroll, true);
+      _fieldOverlay.onScroll = null;
+    }
+    if (_fieldOverlay.raf) {
+      cancelAnimationFrame(_fieldOverlay.raf);
+      _fieldOverlay.raf = 0;
+    }
+    clearOverlayNodes();
+    _fieldOverlay.items = null;
+  }
+
   window.__visus = {
     queryAll: queryAll,
     elementState: elementState,
@@ -382,5 +830,8 @@
     snapshot: snapshot,
     highlight: highlight,
     unhighlight: unhighlight,
+    listFields: listFields,
+    highlightFields: highlightFields,
+    clearHighlights: clearHighlights,
   };
 })();

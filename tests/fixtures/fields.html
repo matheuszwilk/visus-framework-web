@@ -1,0 +1,88 @@
+<!doctype html>
+<html>
+  <head><title>fields fixture</title></head>
+  <body>
+    <h1>Fields</h1>
+
+    <!-- top-level input -->
+    <input id="topinput" name="topinput" placeholder="top" />
+
+    <!-- same-origin iframe (srcdoc) with a visible input: must appear in the
+         DEFAULT visible-only list_fields() (cross-realm isVisible regression). -->
+    <iframe
+      id="f1"
+      width="240"
+      height="80"
+      srcdoc='<!doctype html><html><body><input id="iframeinput" name="iframeinput" style="width:208px;height:36px;" placeholder="in iframe" /></body></html>'
+    ></iframe>
+
+    <!-- shadow-DOM host: button + input inside an open shadow root. Their
+         Field.locator must be re-resolvable via a deep (shadow-piercing) query. -->
+    <div id="host"></div>
+    <script>
+      const root = document.getElementById('host').attachShadow({ mode: 'open' });
+      root.innerHTML =
+        '<button id="shadowbtn">Shadow Button</button>' +
+        '<input id="shadowinput" name="shadowinput" placeholder="shadow" />';
+    </script>
+
+    <!-- =============================================================
+         EXPANDED COVERAGE (existing elements above are preserved as-is).
+         Below: varied native controls, a contenteditable, a custom
+         dropdown, and elements that exercise each locator-ranking tier.
+         ============================================================= -->
+
+    <!-- varied native input types (each has a distinct id so kind classification
+         is assertable without colliding with the ranking-only elements below) -->
+    <input id="text_in" type="text" placeholder="text" />
+    <input id="email_in" type="email" placeholder="email" />
+    <input id="password_in" type="password" placeholder="password" />
+    <input id="number_in" type="number" />
+    <input id="range_in" type="range" min="0" max="10" />
+    <input id="file_in" type="file" />
+    <input id="checkbox_in" type="checkbox" />
+    <input id="radio_in" type="radio" name="grp" />
+
+    <!-- textarea + native select -->
+    <textarea id="ta" placeholder="notes"></textarea>
+    <select id="sel">
+      <option value="a">A</option>
+      <option value="b">B</option>
+    </select>
+
+    <!-- a real button and a real link -->
+    <button id="btn" type="button">Click me</button>
+    <a id="lnk" href="https://example.com/">Example link</a>
+
+    <!-- contenteditable div -> kind "editable" -->
+    <div id="editable_div" contenteditable="true">edit here</div>
+
+    <!-- custom dropdown: role=combobox + aria-haspopup=listbox -> kind "dropdown" -->
+    <div id="dropdown_div" role="combobox" aria-haspopup="listbox" tabindex="0">Pick one</div>
+
+    <!-- hidden field (display:none): excluded by default, present with include_hidden -->
+    <input id="hidden_in" type="text" style="display:none" placeholder="hidden" />
+
+    <!-- =====================  LOCATOR-RANKING TIERS  =====================
+         Each element below isolates exactly ONE ranking tier. The id tier
+         is already covered by every #id element above. -->
+
+    <!-- data-testid ONLY (no id) -> locator_kind "testid" -->
+    <input data-testid="rank-testid" type="text" placeholder="by testid" />
+
+    <!-- name ONLY (no id, no testid) -> locator_kind "name" -->
+    <input name="rank_name" type="text" placeholder="by name" />
+
+    <!-- aria-label ONLY (no id, no testid, no name) -> locator_kind "label".
+         A div with role=textbox so it qualifies as a field candidate and its
+         accessible name comes from aria-label (which is the label tier). Given
+         explicit size so it is visible in the DEFAULT enumeration. -->
+    <div role="textbox" aria-label="rank-label" tabindex="0"
+         style="width:120px;height:24px;border:1px solid #ccc;"></div>
+
+    <!-- role + accessible-name ONLY (no id/testid/name/aria-label).
+         role=button takes its name from text content, so bestLocator falls
+         through to the role+name tier -> locator_kind "role". -->
+    <div role="button" tabindex="0">rank-role-name</div>
+  </body>
+</html>

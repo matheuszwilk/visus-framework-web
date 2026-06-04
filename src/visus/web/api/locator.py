@@ -49,19 +49,31 @@ class Locator:
     def get_by_test_id(self, test_id: str) -> Locator:
         return self._child({"kind": "testid", "value": test_id})
 
-    def locator(self, selector: str) -> Locator:
+    def locator(self, selector: str, *, deep: bool = False) -> Locator:
         if selector.lstrip().startswith("<"):
             # a pasted DevTools element (Copy element) → resilient, multi-candidate locator
             from visus.web.api import _htmlsel
 
-            return self._child(_htmlsel.smart_step(selector))
+            step = _htmlsel.smart_step(selector)
+            if deep:
+                step = {**step, "deep": True}
+            return self._child(step)
         if selector.startswith("xpath="):
             return self._child({"kind": "xpath", "value": selector[len("xpath=") :]})
         if selector.startswith("css="):
-            return self._child({"kind": "css", "value": selector[len("css=") :]})
+            return self._child(self._css_step(selector[len("css=") :], deep))
         if selector.startswith("//") or selector.startswith("("):
             return self._child({"kind": "xpath", "value": selector})
-        return self._child({"kind": "css", "value": selector})
+        return self._child(self._css_step(selector, deep))
+
+    @staticmethod
+    def _css_step(value: str, deep: bool) -> dict[str, object]:
+        # `deep` makes queryAll pierce open shadow roots (shadow-DOM Field.locator
+        # re-resolution). Omitted when false to keep plain CSS steps unchanged.
+        step: dict[str, object] = {"kind": "css", "value": value}
+        if deep:
+            step["deep"] = True
+        return step
 
     def frame_locator(self, selector: str) -> FrameLocator:
         from visus.web.api.frame_locator import FrameLocator, _frame_step

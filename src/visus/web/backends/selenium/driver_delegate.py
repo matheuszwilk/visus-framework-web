@@ -5,7 +5,7 @@ from __future__ import annotations
 import base64
 import os
 import time
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 from selenium.common.exceptions import (
     NoSuchWindowException,
@@ -25,6 +25,9 @@ from visus.web.backends.base import PageDelegate
 from visus.web.backends.selenium.actionability import run_action
 from visus.web.backends.selenium.expect_engine import run_expect
 from visus.web.backends.selenium.js import BUNDLE_JS
+
+if TYPE_CHECKING:
+    from visus.web.api.fields import Field
 
 _KEYMAP = {
     "Enter": Keys.ENTER,
@@ -574,6 +577,89 @@ class SeleniumPageDelegate:
         self._activate()
         self._ensure_bundle()
         return cast(list[dict], self._driver.execute_script("return window.__visus.snapshot();"))  # type: ignore[type-arg]
+
+    def list_fields(
+        self, *, kinds: list[str] | None, include_hidden: bool, highlight: bool
+    ) -> list[Field]:
+        """Enumerate interactive fields via the bundle; optionally draw the overlay."""
+        from visus.web.api.fields import Field
+
+        self._activate()
+        self._ensure_bundle()
+        raw = cast(
+            list[dict[str, object]],
+            self._driver.execute_script(
+                "return window.__visus.listFields(arguments[0]);",
+                {"kinds": kinds, "includeHidden": include_hidden},
+            ),
+        )
+        if highlight:
+            try:
+                self._driver.execute_script(
+                    "window.__visus.highlightFields(arguments[0]);", raw
+                )
+            except WebDriverException:
+                pass  # headless / drawing failures must never break enumeration
+        def _pystr(s: str) -> str:
+            return '"' + s.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+        def _code(d: dict[str, object]) -> str:
+            # The ready-to-paste visus.web expression, frame-aware so an element
+            # inside an iframe is reachable (a bare locator would not be).
+            expr = "page"
+            for sel in cast("list[str]", d.get("frame") or []):
+                expr += f".frame_locator({_pystr(sel)})"
+            if d.get("locator_kind") == "role":
+                role = cast(str, d.get("role") or "")
+                nm = cast(str, d.get("name") or "")
+                expr += f".get_by_role({_pystr(role)}"
+                if nm:
+                    expr += f", name={_pystr(nm)}"
+                expr += ")"
+            else:
+                loc = cast(str, d.get("locator") or "")
+                expr += f".locator({_pystr(loc)}"
+                if d.get("deep"):
+                    expr += ", deep=True"
+                expr += ")"
+            return expr
+
+        fields: list[Field] = []
+        for d in raw:
+            fields.append(
+                Field(
+                    index=cast(int, d["index"]),
+                    kind=cast(str, d["kind"]),
+                    tag=cast(str, d["tag"]),
+                    type=cast("str | None", d["type"]),
+                    role=cast("str | None", d["role"]),
+                    name=cast(str, d["name"]),
+                    label=cast("str | None", d["label"]),
+                    placeholder=cast("str | None", d["placeholder"]),
+                    value=cast("str | None", d["value"]),
+                    checked=cast("bool | None", d["checked"]),
+                    disabled=cast(bool, d["disabled"]),
+                    visible=cast(bool, d["visible"]),
+                    frame=cast("list[str]", d["frame"]),
+                    shadow=cast(bool, d["shadow"]),
+                    locator=cast(str, d["locator"]),
+                    locator_kind=cast(str, d["locator_kind"]),
+                    css=cast(str, d.get("css") or ""),
+                    xpath=cast(str, d.get("xpath") or ""),
+                    code=_code(d),
+                    deep=bool(d.get("deep", False)),
+                )
+            )
+        return fields
+
+    def clear_highlights(self) -> None:
+        """Remove the numbered field overlay and detach its listeners."""
+        self._activate()
+        self._ensure_bundle()
+        try:
+            self._driver.execute_script("window.__visus.clearHighlights();")
+        except WebDriverException:
+            pass
 
     def pdf(self) -> bytes:
         """Print the current page to PDF via W3C print_page (all browsers) with CDP fallback."""

@@ -6,6 +6,7 @@ from visus.web import errors, tracing
 from visus.web.api.assertions import expect
 from visus.web.api.browser import Browser
 from visus.web.api.context import Context
+from visus.web.api.fields import Field
 from visus.web.api.page import Page
 from visus.web.backends.selenium_backend import SeleniumBackend
 from visus.web.config import Defaults
@@ -23,6 +24,7 @@ __all__ = [
     "Browser",
     "Context",
     "Page",
+    "Field",
     "errors",
     "tracing",
 ]

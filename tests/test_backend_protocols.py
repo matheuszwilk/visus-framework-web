@@ -118,6 +118,11 @@ class _FakePage:
     def step_meta(self, selector):
         return {}
 
+    def list_fields(self, *, kinds, include_hidden, highlight):
+        return []
+
+    def clear_highlights(self): ...
+
 
 class _FakeContext:
     def new_page(self):

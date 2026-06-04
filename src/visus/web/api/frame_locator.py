@@ -31,8 +31,8 @@ class FrameLocator:
     def frame_locator(self, selector: str) -> FrameLocator:
         return FrameLocator(self._delegate, self._steps + (_frame_step(selector),), self._defaults)
 
-    def locator(self, selector: str) -> Locator:
-        return Locator(self._delegate, self._steps, self._defaults).locator(selector)
+    def locator(self, selector: str, *, deep: bool = False) -> Locator:
+        return Locator(self._delegate, self._steps, self._defaults).locator(selector, deep=deep)
 
     def get_by_role(self, role: str, *, name: str | None = None, exact: bool = False) -> Locator:
         return Locator(self._delegate, self._steps, self._defaults).get_by_role(

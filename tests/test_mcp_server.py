@@ -32,6 +32,8 @@ _EXPECTED_TOOLS = [
     "browser_reload",
     # Inspect
     "browser_snapshot",
+    "browser_list_fields",
+    "browser_clear_highlights",
     "browser_translate_element",
     "browser_title",
     "browser_url",

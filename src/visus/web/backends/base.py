@@ -2,9 +2,12 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 from visus.web.engine import Engine
+
+if TYPE_CHECKING:
+    from visus.web.api.fields import Field
 
 
 @runtime_checkable
@@ -66,6 +69,10 @@ class PageDelegate(Protocol):
         self, *, accept: bool, prompt_text: str | None, timeout_ms: int
     ) -> tuple[str, str]: ...
     def snapshot(self) -> list[dict]: ...  # type: ignore[type-arg]
+    def list_fields(
+        self, *, kinds: list[str] | None, include_hidden: bool, highlight: bool
+    ) -> list[Field]: ...
+    def clear_highlights(self) -> None: ...
     def pdf(self) -> bytes: ...
     def snapshot_download_dir(self) -> list[str]: ...
     def wait_for_download(self, before: list[str], *, timeout_ms: int) -> tuple[str, str]: ...

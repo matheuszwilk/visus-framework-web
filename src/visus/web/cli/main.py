@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import json as _json
 import runpy
 from pathlib import Path
+from typing import Any
 
 import typer
 
@@ -190,3 +192,255 @@ def codegen(
         typer.echo(f"saved {output}")
     else:
         typer.echo(code)
+
+
+# ---------------------------------------------------------------------------
+# Persistent session: daemon + thin client commands + REPL
+# ---------------------------------------------------------------------------
+
+session_app = typer.Typer(help="Manage the persistent browser session (daemon).")
+app.add_typer(session_app, name="session")
+
+
+def _send(op: str, args: dict[str, Any] | None = None) -> Any:
+    """Send an op to the running daemon, mapping failures to a clean Exit(1)."""
+    from visus.web.cli import session_client
+
+    try:
+        return session_client.send(op, args or {})
+    except session_client.SessionError as exc:
+        typer.echo(f"error: {exc}")
+        raise typer.Exit(1) from exc
+
+
+def _format_fields(fields: list[dict[str, Any]]) -> str:
+    from visus.web.cli.console import format_fields
+
+    return format_fields(fields)
+
+
+def _target_args(
+    index: int | None,
+    selector: str | None,
+    role: str | None,
+    name: str | None,
+    text: str | None,
+) -> dict[str, Any]:
+    """Build the {index|selector|role|name|text} target dict for an action op."""
+    if index is not None:
+        return {"index": index}
+    if not (selector or role or text):
+        typer.echo("error: provide an index, or --selector / --role / --text")
+        raise typer.Exit(1)
+    return {"selector": selector, "role": role, "name": name, "target_text": text}
+
+
+@session_app.command("start")
+def session_start(
+    url: str = typer.Argument(None, help="URL to open once the browser starts."),
+    engine: str = typer.Option("chrome", "--engine", "-e"),
+    headless: bool = typer.Option(False, "--headless", help="Run headless (default: headed)."),
+) -> None:
+    """Start a persistent browser session (detached daemon)."""
+    from visus.web.cli import session_client
+
+    try:
+        info = session_client.start_daemon(engine, headless, url)
+    except session_client.SessionError as exc:
+        typer.echo(f"error: {exc}")
+        raise typer.Exit(1) from exc
+    typer.echo(f"session started (pid {info['pid']}, port {info['port']}, engine {engine})")
+
+
+@session_app.command("stop")
+def session_stop() -> None:
+    """Stop the running session (closes the browser)."""
+    from visus.web.cli import session_client
+
+    typer.echo(session_client.stop())
+
+
+@session_app.command("status")
+def session_status(
+    as_json: bool = typer.Option(False, "--json", help="Emit JSON."),
+) -> None:
+    """Show the running session's status."""
+    from visus.web.cli import session_client
+
+    info = session_client.status()
+    if info is None:
+        typer.echo("no session running")
+        raise typer.Exit(1)
+    if as_json:
+        typer.echo(_json.dumps(info, indent=2, ensure_ascii=False))
+        return
+    for k in ("pid", "port", "engine", "headless", "url", "title", "windows", "fields_cached"):
+        if k in info:
+            typer.echo(f"{k:14}: {info[k]}")
+
+
+@app.command("list-fields")
+def list_fields(
+    kind: str = typer.Option(None, "--kind", help="Comma-separated kinds (e.g. input,button)."),
+    show_all: bool = typer.Option(False, "--all", help="Include hidden/disabled fields."),
+    as_json: bool = typer.Option(False, "--json", help="Emit JSON."),
+    no_highlight: bool = typer.Option(False, "--no-highlight", help="Skip the numbered overlay."),
+) -> None:
+    """Enumerate interactive fields on the current page (numbered, highlighted)."""
+    kinds = [k.strip() for k in kind.split(",") if k.strip()] if kind else None
+    result = _send(
+        "list_fields",
+        {"kinds": kinds, "include_hidden": show_all, "highlight": not no_highlight},
+    )
+    fields = result.get("fields", [])
+    if as_json:
+        typer.echo(_json.dumps(fields, indent=2, ensure_ascii=False))
+        return
+    typer.echo(_format_fields(fields))
+
+
+@app.command()
+def click(
+    index: int = typer.Argument(None, help="Field index from the last list-fields."),
+    selector: str = typer.Option(None, "--selector", "-s"),
+    role: str = typer.Option(None, "--role"),
+    name: str = typer.Option(None, "--name"),
+    text: str = typer.Option(None, "--text"),
+) -> None:
+    """Click a field by index or by --selector/--role/--text."""
+    typer.echo(_send("click", _target_args(index, selector, role, name, text)))
+
+
+@app.command()
+def fill(
+    index: int = typer.Argument(None, help="Field index from the last list-fields."),
+    text: str = typer.Argument(None, help="Text to fill, e.g. `visus fill 7 hello`."),
+    selector: str = typer.Option(None, "--selector", "-s"),
+    role: str = typer.Option(None, "--role"),
+    name: str = typer.Option(None, "--name"),
+    by_text: str = typer.Option(None, "--text", help="Target a field by its visible text."),
+    value: str = typer.Option(
+        None, "--value", help="Text to fill when targeting by --selector/--role/--text."
+    ),
+) -> None:
+    """Fill a field. By index: `visus fill 7 hello`. By selector: `-s "#u" --value hello`."""
+    args = _target_args(index, selector, role, name, by_text)
+    fill_value = text if text is not None else value
+    if fill_value is None:
+        typer.echo("error: no text to fill — use `visus fill <index> <text>` or `--value`")
+        raise typer.Exit(1)
+    args["text"] = fill_value
+    typer.echo(_send("fill", args))
+
+
+@app.command()
+def check(
+    index: int = typer.Argument(None),
+    selector: str = typer.Option(None, "--selector", "-s"),
+    role: str = typer.Option(None, "--role"),
+    name: str = typer.Option(None, "--name"),
+) -> None:
+    """Check a checkbox/radio field."""
+    typer.echo(_send("check", _target_args(index, selector, role, name, None)))
+
+
+@app.command()
+def uncheck(
+    index: int = typer.Argument(None),
+    selector: str = typer.Option(None, "--selector", "-s"),
+    role: str = typer.Option(None, "--role"),
+    name: str = typer.Option(None, "--name"),
+) -> None:
+    """Uncheck a checkbox field."""
+    typer.echo(_send("uncheck", _target_args(index, selector, role, name, None)))
+
+
+@app.command()
+def select(
+    index: int = typer.Argument(None, help="Field index from the last list-fields."),
+    value: str = typer.Argument(None, help="Option value, e.g. `visus select 5 US`."),
+    selector: str = typer.Option(None, "--selector", "-s"),
+    role: str = typer.Option(None, "--role"),
+    name: str = typer.Option(None, "--name"),
+    by_text: str = typer.Option(None, "--text", help="Target a field by its visible text."),
+    option_value: str = typer.Option(
+        None, "--value", help="Option value when targeting by --selector/--role/--text."
+    ),
+) -> None:
+    """Select an option on a <select> field. By index: `visus select 5 US`."""
+    args = _target_args(index, selector, role, name, by_text)
+    val = value if value is not None else option_value
+    if val is None:
+        typer.echo("error: no option value — use `visus select <index> <value>` or `--value`")
+        raise typer.Exit(1)
+    args["value"] = val
+    typer.echo(_send("select", args))
+
+
+@app.command()
+def press(
+    index: int = typer.Argument(None, help="Field index from the last list-fields."),
+    key: str = typer.Argument(None, help="Key to press, e.g. `visus press 7 Enter`."),
+    selector: str = typer.Option(None, "--selector", "-s"),
+    role: str = typer.Option(None, "--role"),
+    name: str = typer.Option(None, "--name"),
+    by_text: str = typer.Option(None, "--text", help="Target a field by its visible text."),
+    key_value: str = typer.Option(
+        None, "--key", help="Key when targeting by --selector/--role/--text."
+    ),
+) -> None:
+    """Press a key on a field (e.g. Enter, Tab, Control+a). By index: `visus press 7 Enter`."""
+    args = _target_args(index, selector, role, name, by_text)
+    k = key if key is not None else key_value
+    if k is None:
+        typer.echo("error: no key — use `visus press <index> <key>` or `--key`")
+        raise typer.Exit(1)
+    args["key"] = k
+    typer.echo(_send("press", args))
+
+
+@app.command()
+def goto(url: str = typer.Argument(..., help="URL to navigate to.")) -> None:
+    """Navigate the session's page to a URL."""
+    typer.echo(f"navigated to {_send('goto', {'url': url})}")
+
+
+@app.command("get-text")
+def get_text(
+    index: int = typer.Argument(None),
+    selector: str = typer.Option(None, "--selector", "-s"),
+    role: str = typer.Option(None, "--role"),
+    name: str = typer.Option(None, "--name"),
+    text: str = typer.Option(None, "--text"),
+) -> None:
+    """Print a field's text content."""
+    typer.echo(_send("get_text", _target_args(index, selector, role, name, text)))
+
+
+@app.command("session-screenshot")
+def session_screenshot(
+    output: str = typer.Option("screenshot.png", "-o", "--output"),
+) -> None:
+    """Screenshot the session's current page to a PNG file."""
+    # Resolve the path against the CLIENT's cwd (not the daemon's) so the PNG
+    # lands where the user invoked the command, not under the daemon's base dir.
+    abs_output = str(Path(output).resolve())
+    typer.echo(f"saved {_send('screenshot', {'path': abs_output})}")
+
+
+@app.command("clear")
+def clear_highlights() -> None:
+    """Remove the numbered field-highlight overlay."""
+    typer.echo(_send("clear_highlights", {}))
+
+
+@app.command()
+def console(
+    url: str = typer.Argument(None, help="Optional URL to open."),
+    engine: str = typer.Option("chrome", "--engine", "-e"),
+    headless: bool = typer.Option(False, "--headless"),
+) -> None:
+    """Open an interactive REPL attached to the session (starts one if none)."""
+    from visus.web.cli.console import run_console
+
+    run_console(url, engine=engine, headless=headless)

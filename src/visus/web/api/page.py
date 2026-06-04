@@ -12,6 +12,7 @@ from visus.web.backends.base import PageDelegate
 from visus.web.config import Defaults
 
 if TYPE_CHECKING:
+    from visus.web.api.fields import Field
     from visus.web.api.frame_locator import FrameLocator
     from visus.web.api.input import Keyboard, Mouse
 
@@ -73,8 +74,8 @@ class Page:
     def is_closed(self) -> bool:
         return self._delegate.is_closed()
 
-    def locator(self, selector: str) -> Locator:
-        return Locator(self._delegate, (), self._defaults).locator(selector)
+    def locator(self, selector: str, *, deep: bool = False) -> Locator:
+        return Locator(self._delegate, (), self._defaults).locator(selector, deep=deep)
 
     def frame_locator(self, selector: str) -> FrameLocator:
         from visus.web.api.frame_locator import FrameLocator, _frame_step
@@ -105,6 +106,29 @@ class Page:
     def snapshot(self) -> list[dict]:  # type: ignore[type-arg]
         """Return the page's interactive elements as a list of {role, name} dicts."""
         return self._delegate.snapshot()
+
+    def list_fields(
+        self,
+        *,
+        kinds: list[str] | None = None,
+        include_hidden: bool = False,
+        highlight: bool = True,
+    ) -> list[Field]:
+        """Enumerate RPA-relevant interactive fields on the current page.
+
+        Walks the main document, open Shadow DOM, and same-origin iframes, returning
+        a stable, document-order list of :class:`Field` descriptors. By default only
+        visible, enabled fields are returned and a numbered overlay is drawn (a no-op
+        in headless); pass ``highlight=False`` to skip drawing, ``include_hidden=True``
+        to also return hidden/disabled fields, or ``kinds=[...]`` to filter by kind.
+        """
+        return self._delegate.list_fields(
+            kinds=kinds, include_hidden=include_hidden, highlight=highlight
+        )
+
+    def clear_highlights(self) -> None:
+        """Remove the numbered field overlay drawn by :meth:`list_fields`."""
+        self._delegate.clear_highlights()
 
     def evaluate(self, expression: str, arg: object = None) -> object:
         return self._delegate.evaluate(expression, arg)

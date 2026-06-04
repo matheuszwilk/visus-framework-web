@@ -84,6 +84,40 @@ def browser_snapshot() -> list[dict]:  # type: ignore[type-arg]
 
 
 @mcp.tool()
+def browser_list_fields(
+    kind: str | None = None,
+    include_hidden: bool = False,
+    highlight: bool = False,
+) -> list[dict]:  # type: ignore[type-arg]
+    """List all RPA-relevant interactive fields on the current page.
+
+    Enumerates buttons, inputs, textareas, links, selects, checkboxes/radios,
+    custom dropdowns, and contenteditable elements — framework-agnostically,
+    across open shadow DOM and same-origin iframes. Each returned dict carries a
+    ready-to-use locator plus the frame chain and a deep flag so the field can be
+    re-resolved for an action (root = page; for sel in frame: root =
+    root.frame_locator(sel); target = root.locator(locator, deep=deep)).
+
+    kind is an optional comma-separated filter (e.g. "button,input") restricting
+    the result to those kinds; omit it to list every kind. include_hidden also
+    returns hidden/disabled fields (flagged). highlight draws the numbered
+    overlay on the page (default off; a no-op when headless).
+    """
+    parsed = [k.strip() for k in kind.split(",") if k.strip()] if kind else None
+    fields = _session.page().list_fields(
+        kinds=parsed, include_hidden=include_hidden, highlight=highlight
+    )
+    return [f.to_dict() for f in fields]
+
+
+@mcp.tool()
+def browser_clear_highlights() -> str:
+    """Remove the numbered field-highlight overlay drawn by browser_list_fields."""
+    _session.page().clear_highlights()
+    return "cleared"
+
+
+@mcp.tool()
 def browser_translate_element(html: str) -> dict[str, object]:
     """Translate a pasted DevTools element (Copy element) into selectors.
 
