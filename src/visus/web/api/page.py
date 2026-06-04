@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, cast
 
 from visus.web.api._steps import run_step
 from visus.web.api.events import Dialog, Download, _ValueHolder
@@ -21,6 +21,7 @@ class Page:
     def __init__(self, delegate: PageDelegate, defaults: Defaults) -> None:
         self._delegate = delegate
         self._defaults = defaults
+        self._last_fields: list[Field] = []
 
     def goto(
         self,
@@ -122,9 +123,44 @@ class Page:
         in headless); pass ``highlight=False`` to skip drawing, ``include_hidden=True``
         to also return hidden/disabled fields, or ``kinds=[...]`` to filter by kind.
         """
-        return self._delegate.list_fields(
+        fields = self._delegate.list_fields(
             kinds=kinds, include_hidden=include_hidden, highlight=highlight
         )
+        self._last_fields = list(fields)  # cached for field(index)
+        return fields
+
+    def field_locator(self, field: Field) -> Locator:
+        """Build a :class:`Locator` for an enumerated :class:`Field` (from
+        :meth:`list_fields`), resolving its iframe chain and shadow-DOM (``deep``)
+        automatically — the script equivalent of the CLI's ``visus click/fill <n>``::
+
+            for f in page.list_fields():
+                if f.name == "Username":
+                    page.field_locator(f).fill("student")
+        """
+        root: Any = self
+        for sel in field.frame:
+            root = root.frame_locator(sel)
+        return cast(Locator, root.locator(field.locator, deep=field.deep))
+
+    def field(self, index: int) -> Locator:
+        """:class:`Locator` for field #*index* from the most recent
+        :meth:`list_fields` call — act by number like the CLI::
+
+            page.list_fields()              # discover (also draws the overlay)
+            page.field(9).fill("student")   # == `visus fill 9 student`
+
+        Note: indices are positional and shift if the page changes — great for
+        quick/interactive scripts; for durable automation prefer a stable selector
+        (e.g. the ``code``/``css`` from a field, like ``page.locator("#username")``).
+        """
+        if not self._last_fields:
+            raise RuntimeError("no fields cached — call page.list_fields() first")
+        if not 0 <= index < len(self._last_fields):
+            raise IndexError(
+                f"field index {index} out of range (have {len(self._last_fields)})"
+            )
+        return self.field_locator(self._last_fields[index])
 
     def clear_highlights(self) -> None:
         """Remove the numbered field overlay drawn by :meth:`list_fields`."""

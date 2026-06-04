@@ -191,3 +191,46 @@ def test_numbered_highlight_overlay_matches_field_indices_then_clears(page):
         page.evaluate("() => document.querySelectorAll('[data-visus-field]').length")
         == 0
     )
+
+
+@pytest.mark.browser
+def test_field_by_index_and_field_locator(page):
+    # Acting by index in the library (the script equivalent of `visus fill <n>`).
+    with pytest.raises(RuntimeError):
+        page.field(0)  # nothing enumerated yet
+
+    fields = page.list_fields(highlight=False)
+    idx = next(f.index for f in fields if f.locator == "#topinput")
+
+    page.field(idx).fill("by-index")
+    assert page.field(idx).input_value() == "by-index"
+
+    # field_locator(field) resolves frame chain + deep for a given Field object.
+    f = next(f for f in fields if f.locator == "#topinput")
+    page.field_locator(f).fill("by-field")
+    assert page.field_locator(f).input_value() == "by-field"
+
+    with pytest.raises(IndexError):
+        page.field(10_000)
+
+
+@pytest.mark.browser
+def test_field_and_field_locator_work_in_iframe_and_shadow(page):
+    # Parity with CLI/MCP: acting on an enumerated field by index/Field must work
+    # whether the element is top-level, inside an iframe, or inside open Shadow DOM.
+    fields = page.list_fields(highlight=False, include_hidden=True)
+    by = {f.locator: f for f in fields}
+
+    # iframe field — the frame chain (#f1) is applied automatically.
+    iframe_f = by["#iframeinput"]
+    assert iframe_f.frame == ["#f1"]
+    page.field_locator(iframe_f).fill("in-frame")
+    assert page.field_locator(iframe_f).input_value() == "in-frame"
+    page.field(iframe_f.index).fill("in-frame-by-index")  # by index too
+    assert page.field(iframe_f.index).input_value() == "in-frame-by-index"
+
+    # shadow-DOM field — deep (shadow-piercing) re-resolution is applied automatically.
+    shadow_f = by["#shadowinput"]
+    assert shadow_f.deep is True
+    page.field_locator(shadow_f).fill("in-shadow")
+    assert page.field_locator(shadow_f).input_value() == "in-shadow"
