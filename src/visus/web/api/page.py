@@ -12,6 +12,7 @@ from visus.web.backends.base import PageDelegate
 from visus.web.config import Defaults
 
 if TYPE_CHECKING:
+    from visus.web.api.context import Context
     from visus.web.api.fields import Field
     from visus.web.api.frame_locator import FrameLocator
     from visus.web.api.input import Keyboard, Mouse
@@ -83,6 +84,18 @@ class Page:
         a row in a window list across refreshes.
         """
         return self._delegate.handle()
+
+    @property
+    def context(self) -> Context:
+        """The :class:`~visus.web.api.context.Context` this page belongs to.
+
+        Playwright-style ``page.context`` — lets you reach ``page.context.pages``
+        (e.g. from the page handed to you by ``rpa()``) to enumerate or focus
+        other tabs without dropping down to ``launch``.
+        """
+        from visus.web.api.context import Context
+
+        return Context(self._delegate.context(), self._defaults)
 
     def bring_to_front(self) -> None:
         """Focus this page's tab/window (brings it to the front)."""

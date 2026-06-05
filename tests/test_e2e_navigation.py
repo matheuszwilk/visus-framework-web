@@ -152,3 +152,33 @@ def test_page_handle_is_stable_and_distinct(browser):
     assert isinstance(page.handle, str) and page.handle
     assert page.handle == page.handle
     assert page.handle != page2.handle
+
+
+@pytest.mark.browser
+def test_page_context_reaches_pages(browser, base_url):
+    """page.context returns the owning Context — so you can enumerate tabs from a Page."""
+    page = browser.new_page()
+    page.goto(f"{base_url}/popups.html")
+
+    ctx = page.context
+    assert page.handle in {p.handle for p in ctx.pages}
+
+    page.evaluate(OPEN_FORMS_JS)  # window.open, no expect_popup
+    pages = _wait_pages(ctx, 2)
+    assert any(p.url.endswith("/forms.html") for p in pages)
+
+
+@pytest.mark.browser
+def test_rpa_page_exposes_context_for_tab_navigation(base_url, tmp_path):
+    """rpa() + tab navigation coexist: the yielded page reaches context.pages."""
+    from visus.web import rpa
+
+    with rpa(
+        "ctx-test", engine="chrome", headless=True, outdir=str(tmp_path), summary=False
+    ) as page:
+        page.goto(f"{base_url}/popups.html")
+        ctx = page.context
+        assert page.handle in {p.handle for p in ctx.pages}
+        page.evaluate(OPEN_FORMS_JS)
+        pages = _wait_pages(ctx, 2)
+        assert any(p.url.endswith("/forms.html") for p in pages)

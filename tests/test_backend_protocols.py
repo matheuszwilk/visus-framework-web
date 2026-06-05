@@ -35,6 +35,9 @@ class _FakePage:
 
     def bring_to_front(self): ...
 
+    def context(self):
+        return _FakeContext()
+
     def locator_count(self, selector):
         return 0
 

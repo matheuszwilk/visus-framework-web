@@ -21,7 +21,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import Select, WebDriverWait
 
 from visus.web import errors
-from visus.web.backends.base import PageDelegate
+from visus.web.backends.base import ContextDelegate, PageDelegate
 from visus.web.backends.selenium.actionability import run_action
 from visus.web.backends.selenium.expect_engine import run_expect
 from visus.web.backends.selenium.js import BUNDLE_JS
@@ -105,6 +105,12 @@ class SeleniumPageDelegate:
     def bring_to_front(self) -> None:
         """Focus this page's tab/window (Selenium ``switch_to.window``)."""
         self._activate()
+
+    def context(self) -> ContextDelegate:
+        """Return the context delegate that owns this page (``Page.context`` backing)."""
+        if self._context is None:
+            raise errors.VisusWebError("page is not attached to a context")
+        return self._context
 
     def goto(self, url: str, *, wait_until: str, timeout_ms: int) -> None:
         self._activate()

@@ -14,7 +14,7 @@ USERNAME = "student"
 PASSWORD = "Password123"
 
 # add open_report=True to pop the HTML report open at the end
-with rpa("practice-login", engine=ENGINE) as page:
+with rpa("practice-login", engine=ENGINE, open_report=True) as page:
     page.goto("https://practicetestautomation.com/practice-test-login/")
 
     # paste-an-element locators — copied straight from DevTools ("Copy element")
