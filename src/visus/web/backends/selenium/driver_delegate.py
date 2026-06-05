@@ -75,11 +75,18 @@ def translate_exc(exc: Exception) -> errors.VisusWebError:
 class SeleniumPageDelegate:
     """One browser window handle. Activates its window before each operation."""
 
-    def __init__(self, driver: WebDriver, handle: str, download_dir: str | None = None) -> None:
+    def __init__(
+        self,
+        driver: WebDriver,
+        handle: str,
+        download_dir: str | None = None,
+        context: SeleniumContextDelegate | None = None,
+    ) -> None:
         self._driver = driver
         self._handle = handle
         self._closed = False
         self._download_dir = download_dir
+        self._context = context
         self._mouse_x: int = 0
         self._mouse_y: int = 0
 
@@ -90,6 +97,14 @@ class SeleniumPageDelegate:
             self._driver.switch_to.window(self._handle)
         except WebDriverException as exc:
             raise translate_exc(exc) from exc
+
+    def handle(self) -> str:
+        """Return this page's underlying browser window-handle string."""
+        return self._handle
+
+    def bring_to_front(self) -> None:
+        """Focus this page's tab/window (Selenium ``switch_to.window``)."""
+        self._activate()
 
     def goto(self, url: str, *, wait_until: str, timeout_ms: int) -> None:
         self._activate()
@@ -548,7 +563,9 @@ class SeleniumPageDelegate:
             new = set(self._driver.window_handles) - before_set
             if new:
                 handle = new.pop()
-                return SeleniumPageDelegate(self._driver, handle)
+                if self._context is not None:
+                    return self._context._make_page(handle)
+                return SeleniumPageDelegate(self._driver, handle, self._download_dir)
             if time.monotonic() >= deadline:
                 raise errors.VisusTimeoutError(f"no new popup appeared within {timeout_ms} ms")
             time.sleep(0.05)
@@ -912,11 +929,55 @@ class SeleniumContextDelegate:
         self._profile_dir = profile_dir
         self._pages: list[SeleniumPageDelegate] = []
         if first_handle is not None:
-            self._pages.append(SeleniumPageDelegate(driver, first_handle, download_dir))
+            self._make_page(first_handle)
 
     @property
     def owns_driver(self) -> bool:
         return self._owns_driver
+
+    def _make_page(self, handle: str) -> SeleniumPageDelegate:
+        """Return the tracked page for *handle*, creating + registering it if new.
+
+        Deduplicates by handle so a popup adopted via ``expect_popup`` and a
+        handle picked up by :meth:`_reconcile` resolve to the same delegate.
+        """
+        for p in self._pages:
+            if p._handle == handle and not p._closed:
+                return p
+        page = SeleniumPageDelegate(self._driver, handle, self._download_dir, context=self)
+        self._pages.append(page)
+        return page
+
+    def _live_handles(self) -> list[str] | None:
+        """Current window handles, or ``None`` if the driver session is gone.
+
+        A disposed driver fails to answer at all (``WebDriverException`` for an
+        invalid session, or a raw connection error once the process has quit);
+        any such failure means the session is unusable, so treat it as gone.
+        """
+        try:
+            return list(self._driver.window_handles)
+        except Exception:
+            return None
+
+    def _reconcile(self) -> list[SeleniumPageDelegate]:
+        """Sync ``_pages`` against the driver's real window handles.
+
+        Adopts handles opened outside visus (links, ``window.open``) and marks
+        pages whose handle has vanished (closed externally) as closed. Returns
+        the list of newly-adopted pages, in the browser's handle order.
+        """
+        live = self._live_handles()
+        if live is None:  # session disposed — everything is gone
+            for p in self._pages:
+                p._closed = True
+            return []
+        live_set = set(live)
+        tracked = {p._handle for p in self._pages if not p._closed}
+        for p in self._pages:
+            if not p._closed and p._handle not in live_set:
+                p._closed = True
+        return [self._make_page(h) for h in live if h not in tracked]
 
     def new_page(self) -> PageDelegate:
         before = set(self._driver.window_handles)
@@ -929,12 +990,20 @@ class SeleniumContextDelegate:
             raise errors.VisusWebError(
                 f"expected exactly one new window handle, found {len(new_handles)}"
             )
-        page = SeleniumPageDelegate(self._driver, new_handles.pop(), self._download_dir)
-        self._pages.append(page)
-        return page
+        return self._make_page(new_handles.pop())
 
     def pages(self) -> list[PageDelegate]:
+        self._reconcile()
         return [p for p in self._pages if not p.is_closed()]
+
+    def adopt_open_windows(self) -> list[PageDelegate]:
+        """Adopt browser windows/tabs opened outside visus; return the new ones.
+
+        ``pages()`` already reconciles on every read; this is the explicit
+        trigger that returns *just* the pages discovered by this call (empty if
+        everything was already tracked). Also drops externally-closed windows.
+        """
+        return list(self._reconcile())
 
     def close(self) -> None:
         for page in list(self._pages):

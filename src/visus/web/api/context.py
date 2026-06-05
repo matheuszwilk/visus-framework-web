@@ -17,6 +17,15 @@ class Context:
     def pages(self) -> list[Page]:
         return [Page(d, self._defaults) for d in self._delegate.pages()]
 
+    def adopt_open_windows(self) -> list[Page]:
+        """Adopt browser windows/tabs opened outside visus (links, ``window.open``).
+
+        ``context.pages`` already reflects these automatically; call this when you
+        want the list of *just-discovered* pages. Also drops windows that were
+        closed externally. Returns the newly-adopted pages.
+        """
+        return [Page(d, self._defaults) for d in self._delegate.adopt_open_windows()]
+
     def close(self) -> None:
         self._delegate.close()
 

@@ -30,6 +30,11 @@ class _FakePage:
     def is_closed(self):
         return False
 
+    def handle(self):
+        return ""
+
+    def bring_to_front(self): ...
+
     def locator_count(self, selector):
         return 0
 
@@ -129,6 +134,9 @@ class _FakeContext:
         return _FakePage()
 
     def pages(self):
+        return []
+
+    def adopt_open_windows(self):
         return []
 
     def close(self): ...

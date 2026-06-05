@@ -75,6 +75,23 @@ class Page:
     def is_closed(self) -> bool:
         return self._delegate.is_closed()
 
+    @property
+    def handle(self) -> str:
+        """The underlying browser window-handle string identifying this tab/window.
+
+        Stable for the lifetime of the browser session — use it to key a page to
+        a row in a window list across refreshes.
+        """
+        return self._delegate.handle()
+
+    def bring_to_front(self) -> None:
+        """Focus this page's tab/window (brings it to the front)."""
+        self._delegate.bring_to_front()
+
+    def activate(self) -> None:
+        """Alias for :meth:`bring_to_front`."""
+        self._delegate.bring_to_front()
+
     def locator(self, selector: str, *, deep: bool = False) -> Locator:
         return Locator(self._delegate, (), self._defaults).locator(selector, deep=deep)
 
