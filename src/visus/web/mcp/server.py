@@ -473,7 +473,12 @@ def browser_expect_text(
 
 @mcp.tool()
 def browser_tab_list() -> list[dict]:  # type: ignore[type-arg]
-    """List all open tabs as [{index, title, url}]."""
+    """List all open tabs as [{index, handle, title, url}].
+
+    Reflects every open tab — including ones opened by a link or window.open —
+    by reconciling against the live window handles. ``handle`` is a stable id you
+    can pass to browser_tab_activate.
+    """
     pages = _session.pages()
     result = []
     for i, p in enumerate(pages):
@@ -483,7 +488,7 @@ def browser_tab_list() -> list[dict]:  # type: ignore[type-arg]
         except Exception:
             title = ""
             url = ""
-        result.append({"index": i, "title": title, "url": url})
+        result.append({"index": i, "handle": p.handle, "title": title, "url": url})
     return result
 
 
@@ -500,6 +505,13 @@ def browser_tab_select(index: int) -> str:
     """Switch to a tab by its 0-based index."""
     p = _session.select(index)
     return f"switched to tab {index} ({p.url!r})"
+
+
+@mcp.tool()
+def browser_tab_activate(handle: str) -> str:
+    """Focus a tab by its stable handle (from browser_tab_list). Survives reordering."""
+    p = _session.activate(handle)
+    return f"activated tab {handle} ({p.url!r})"
 
 
 @mcp.tool()

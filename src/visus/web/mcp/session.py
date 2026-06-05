@@ -87,6 +87,14 @@ class Session:
 
     def pages(self) -> list[Page]:
         self._ensure()
+        assert self._context is not None
+        # Surface tabs opened outside our tracking (a link / window.open) by
+        # reconciling against the live window handles — additive, dedup by handle.
+        seen = {p.handle for p in self._pages}
+        for p in self._context.adopt_open_windows():
+            if p.handle not in seen:
+                self._pages.append(p)
+                seen.add(p.handle)
         return list(self._pages)
 
     def select(self, index: int) -> Page:
@@ -95,6 +103,16 @@ class Session:
             raise IndexError(f"tab index {index} out of range (have {len(self._pages)} tabs)")
         self._current_idx = index
         return self._pages[index]
+
+    def activate(self, handle: str) -> Page:
+        """Focus a tab by its stable window handle (reconciles external tabs first)."""
+        self.pages()  # reconcile so externally-opened tabs are selectable
+        for i, p in enumerate(self._pages):
+            if p.handle == handle:
+                p.bring_to_front()
+                self._current_idx = i
+                return p
+        raise ValueError(f"no open tab with handle {handle!r}")
 
     def close_tab(self, index: int | None = None) -> None:
         self._ensure()

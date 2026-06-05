@@ -535,7 +535,9 @@ class SessionHandler:
                 title, url = driver.title, driver.current_url
             except Exception:  # noqa: BLE001
                 title, url = "", ""
-            tabs.append({"index": i, "title": title, "url": url, "active": h == active})
+            tabs.append(
+                {"index": i, "handle": h, "title": title, "url": url, "active": h == active}
+            )
         try:
             driver.switch_to.window(active)  # restore the active tab
         except Exception:  # noqa: BLE001

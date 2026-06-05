@@ -242,6 +242,47 @@ def test_tabs(srv):  # type: ignore[no-untyped-def]
     assert len(tabs3) == 1
 
 
+@pytest.mark.browser
+def test_tab_list_entries_expose_handle(srv):  # type: ignore[no-untyped-def]
+    server, base_url = srv
+    server.browser_navigate(f"{base_url}/forms.html")
+    tabs = server.browser_tab_list()
+    assert tabs[0].get("handle")  # stable, non-empty handle string
+    assert isinstance(tabs[0]["handle"], str)
+
+
+@pytest.mark.browser
+def test_tab_list_includes_external_window_open_tab(srv):  # type: ignore[no-untyped-def]
+    """A tab opened by window.open (no expect_popup, no follow) appears in tab_list."""
+    import time
+
+    server, base_url = srv
+    server.browser_navigate(f"{base_url}/popups.html")
+    assert len(server.browser_tab_list()) == 1
+    server.browser_click(selector="#pop")  # window.open('/forms.html','_blank')
+
+    deadline = time.monotonic() + 5
+    tabs = server.browser_tab_list()
+    while len(tabs) < 2 and time.monotonic() < deadline:
+        time.sleep(0.05)
+        tabs = server.browser_tab_list()
+    assert len(tabs) == 2
+    assert any("forms.html" in t["url"] for t in tabs)
+
+
+@pytest.mark.browser
+def test_tab_activate_by_handle(srv):  # type: ignore[no-untyped-def]
+    server, base_url = srv
+    server.browser_navigate(f"{base_url}/forms.html")  # tab 0
+    server.browser_tab_new(f"{base_url}/rpa.html")  # tab 1 (current)
+    tabs = server.browser_tab_list()
+    assert len(tabs) == 2
+    handle0 = tabs[0]["handle"]
+
+    server.browser_tab_activate(handle0)
+    assert "forms.html" in server.browser_url()
+
+
 # ---------------------------------------------------------------------------
 # Dialogs
 # ---------------------------------------------------------------------------
