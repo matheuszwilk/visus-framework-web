@@ -1,0 +1,109 @@
+Licença de Software Proprietário — visus-web
+Proprietary Software License — visus-web
+
+Copyright (c) 2026 Matheus Pereira. Todos os direitos reservados. / All rights reserved.
+
+================================================================================
+PORTUGUÊS
+================================================================================
+
+Este software e o respectivo código-fonte ("Software") são de propriedade
+exclusiva de Matheus Pereira ("Licenciante") e protegidos por leis de direitos
+autorais e tratados internacionais. O Software NÃO é software livre nem de
+código aberto.
+
+1. CONCESSÃO DE LICENÇA
+   Sujeito ao cumprimento integral destes termos, o Licenciante concede a você
+   ("Licenciado") uma licença pessoal, mundial, não exclusiva, intransferível e
+   revogável para INSTALAR e USAR o Software, na forma em que é distribuído, como
+   dependência em seus próprios projetos e aplicações.
+
+2. RESTRIÇÕES
+   Salvo autorização prévia e por escrito do Licenciante, é EXPRESSAMENTE
+   PROIBIDO:
+   (a) copiar, reproduzir ou publicar o código-fonte do Software, no todo ou em
+       parte, em qualquer meio ou repositório;
+   (b) redistribuir, sublicenciar, vender, alugar, emprestar, ceder ou de
+       qualquer forma disponibilizar o Software a terceiros, isoladamente ou
+       como parte de outro produto;
+   (c) modificar, adaptar, traduzir ou criar obras derivadas do Software;
+   (d) realizar engenharia reversa, descompilar, desmontar ou de outro modo
+       tentar obter o código-fonte a partir de versões compiladas;
+   (e) remover, ocultar ou alterar avisos de direitos autorais, marcas ou esta
+       licença;
+   (f) usar o Software para criar um produto ou serviço concorrente.
+
+3. PROPRIEDADE
+   O Software é licenciado, não vendido. O Licenciante retém todos os direitos,
+   títulos e interesses sobre o Software, incluindo todos os direitos de
+   propriedade intelectual. Nenhum direito é concedido por implicação.
+
+4. RESCISÃO
+   Esta licença é automaticamente rescindida, sem aviso, caso o Licenciado
+   descumpra qualquer destes termos. Na rescisão, o Licenciado deve cessar todo
+   uso e destruir todas as cópias do Software em sua posse.
+
+5. ISENÇÃO DE GARANTIAS
+   O SOFTWARE É FORNECIDO "NO ESTADO EM QUE SE ENCONTRA", SEM GARANTIAS DE
+   QUALQUER NATUREZA, EXPRESSAS OU IMPLÍCITAS, INCLUINDO, MAS NÃO SE LIMITANDO
+   A, GARANTIAS DE COMERCIABILIDADE, ADEQUAÇÃO A UM FIM ESPECÍFICO E NÃO
+   VIOLAÇÃO.
+
+6. LIMITAÇÃO DE RESPONSABILIDADE
+   EM NENHUMA HIPÓTESE O LICENCIANTE SERÁ RESPONSÁVEL POR QUAISQUER DANOS
+   (DIRETOS, INDIRETOS, INCIDENTAIS, ESPECIAIS OU CONSEQUENCIAIS) DECORRENTES DO
+   USO OU DA IMPOSSIBILIDADE DE USO DO SOFTWARE.
+
+Para licenças comerciais, de redistribuição ou usos não previstos acima, entre
+em contato com o Licenciante.
+
+================================================================================
+ENGLISH
+================================================================================
+
+This software and its source code (the "Software") are the exclusive property of
+Matheus Pereira (the "Licensor") and are protected by copyright law and
+international treaties. The Software is NOT free or open-source software.
+
+1. LICENSE GRANT
+   Subject to full compliance with these terms, the Licensor grants you (the
+   "Licensee") a personal, worldwide, non-exclusive, non-transferable, revocable
+   license to INSTALL and USE the Software, as distributed, as a dependency in
+   your own projects and applications.
+
+2. RESTRICTIONS
+   Except with the Licensor's prior written permission, you may NOT:
+   (a) copy, reproduce, or publish the Software's source code, in whole or in
+       part, on any medium or repository;
+   (b) redistribute, sublicense, sell, rent, lease, lend, assign, or otherwise
+       make the Software available to third parties, alone or as part of another
+       product;
+   (c) modify, adapt, translate, or create derivative works of the Software;
+   (d) reverse engineer, decompile, disassemble, or otherwise attempt to derive
+       the source code from compiled forms;
+   (e) remove, obscure, or alter any copyright notices, trademarks, or this
+       license;
+   (f) use the Software to build a competing product or service.
+
+3. OWNERSHIP
+   The Software is licensed, not sold. The Licensor retains all right, title, and
+   interest in and to the Software, including all intellectual property rights.
+   No rights are granted by implication.
+
+4. TERMINATION
+   This license terminates automatically, without notice, if the Licensee
+   breaches any of these terms. Upon termination, the Licensee must cease all use
+   and destroy all copies of the Software in their possession.
+
+5. DISCLAIMER OF WARRANTY
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+   FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT.
+
+6. LIMITATION OF LIABILITY
+   IN NO EVENT SHALL THE LICENSOR BE LIABLE FOR ANY DAMAGES (DIRECT, INDIRECT,
+   INCIDENTAL, SPECIAL, OR CONSEQUENTIAL) ARISING OUT OF THE USE OF OR INABILITY
+   TO USE THE SOFTWARE.
+
+For commercial licenses, redistribution rights, or any use not permitted above,
+please contact the Licensor.

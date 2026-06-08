@@ -8,8 +8,13 @@ version = "0.0.1"
 description = "Modern, Playwright-style web automation on a pure Selenium engine, with BotCity RPA reach."
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "MIT" }
+license = { file = "LICENSE" }
 authors = [{ name = "Matheus Pereira" }]
+classifiers = [
+    "License :: Other/Proprietary License",
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: Python :: 3",
+]
 dependencies = ["selenium>=4.38,<5"]
 
 [project.optional-dependencies]
