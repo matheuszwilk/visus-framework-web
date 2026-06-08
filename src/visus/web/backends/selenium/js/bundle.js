@@ -248,10 +248,14 @@
           }
         }
       } else if (step.kind === "xpath") {
-        for (r = 0; r < roots.length; r++) {
-          var ctx = (roots[r] === document) ? document : roots[r];
-          var res = document.evaluate(step.value, ctx, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
-          for (j = 0; j < res.snapshotLength; j++) out.push(res.snapshotItem(j));
+        // IE / Trident (Edge IE-mode) has no document.evaluate/XPathResult: skip XPath
+        // resolution there (leave `out` empty for this step) instead of throwing.
+        if (typeof document.evaluate === "function" && typeof XPathResult !== "undefined") {
+          for (r = 0; r < roots.length; r++) {
+            var ctx = (roots[r] === document) ? document : roots[r];
+            var res = document.evaluate(step.value, ctx, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
+            for (j = 0; j < res.snapshotLength; j++) out.push(res.snapshotItem(j));
+          }
         }
       } else if (step.kind === "role") {
         for (r = 0; r < roots.length; r++) {
@@ -326,7 +330,7 @@
                 } else {
                   sFound.push.apply(sFound, base.querySelectorAll(cand.css));
                 }
-              } else if (cand.xpath != null) {
+              } else if (cand.xpath != null && typeof document.evaluate === "function" && typeof XPathResult !== "undefined") {
                 var sCtx = (base === document) ? document : base;
                 var sRes = document.evaluate(cand.xpath, sCtx, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
                 for (j = 0; j < sRes.snapshotLength; j++) sFound.push(sRes.snapshotItem(j));
