@@ -91,8 +91,9 @@ scratch, fully typed, with **no Playwright dependency**. On top of the test-auto
   snapshot, all actions, tabs, dialogs, cookies, screenshot, evaluate, vision) to AI agents.
 - **⌨️ Full-featured CLI (`[cli]`)** — the `visus` command mirrors the whole surface in the shell
   with a persistent browser daemon, `--json` everywhere, and an interactive `console`.
-- **🔌 Async API** — `visus.web.async_api` wraps the whole surface in `asyncio.to_thread`; builders
-  stay sync (recipe-only), reads and actions are `await`-able.
+- **🔌 Async API** — `visus.web.async_api` is a 100% mirror of the sync surface (same names, same
+  parameters) wrapped in `asyncio.to_thread`; builders stay sync (recipe-only), reads and actions
+  are `await`-able.
 - **🌐 Selenium compatibility** — Chrome, Edge, Firefox, and **Edge IE-mode** (Trident) for legacy
   corporate apps.
 - **🏷️ Fully typed** — ships a `py.typed` marker; no `selenium.*` type ever crosses the public API.
@@ -608,8 +609,15 @@ tracing.render_report("run.zip", "report.html")
 
 ### Async API
 
-`visus.web.async_api` wraps the whole surface. **Builders stay sync** (recipe only); reads and
-actions are `await`-able and run in a thread so the event loop never blocks:
+`visus.web.async_api` is a **100% mirror** of the synchronous surface — same method names,
+**same parameter names** — so porting sync code is a mechanical `await` insertion. The rule:
+
+- **Builders stay sync** (`get_by_*` / `locator` / `first` / `last` / `nth` / `filter` /
+  `frame_locator`) and so do **zero-I/O accessors** (`page.handle` / `page.is_closed` /
+  `page.context` / `browser.contexts` / `page.mouse` / `page.keyboard` / `page.field` /
+  `page.field_locator`) — they never touch the browser.
+- **Everything that reaches the live browser** is `await`-able and runs in a thread, so the
+  event loop never blocks.
 
 ```python
 import asyncio
@@ -626,8 +634,38 @@ async def main():
 asyncio.run(main())
 ```
 
-Exports: `launch`, `expect`, `AsyncBrowser`, `AsyncContext`, `AsyncPage`, `AsyncLocator`,
-`AsyncFrameLocator`, `AsyncLocatorAssertions`.
+Everything the sync API offers is here too — RPA, tracing, the field enumerator, low-level
+mouse/keyboard, captcha solving, popup/dialog/download capture, and multi-tab navigation:
+
+```python
+from visus.web.async_api import rpa
+
+async def login():
+    # batteries-included: launch + record + report + summary, all handled
+    async with rpa("login", engine="chrome", headless=True) as page:
+        await page.goto("https://example.com/login")
+
+        # field enumerator — act by number, like the CLI
+        for f in await page.list_fields():
+            if f.name == "Username":
+                await page.field(f.index).fill("ada")
+
+        # low-level input devices
+        await page.mouse.click(120, 240)
+        await page.keyboard.press("Control+a")
+
+        # event capture (context managers propagate errors just like sync)
+        async with page.expect_popup() as popup:
+            await page.get_by_role("link", name="Terms").click()
+        await popup.value.close()
+
+        # multi-tab: page.context reaches the other tabs
+        handles = {p.handle for p in await page.context.pages()}
+```
+
+Exports: `launch`, `rpa`, `expect`, `Engine`, `errors`, `tracing`, `Field`, `Dialog`,
+`Download`, `AsyncBrowser`, `AsyncContext`, `AsyncPage`, `AsyncLocator`, `AsyncFrameLocator`,
+`AsyncLocatorAssertions`, `AsyncMouse`, `AsyncKeyboard`.
 
 ---
 

@@ -7,16 +7,31 @@ the async test functions automatically.
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+import inspect
+from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
+from visus.web import errors
+from visus.web.api.assertions import LocatorAssertions
+from visus.web.api.browser import Browser
+from visus.web.api.context import Context
+from visus.web.api.events import Dialog, Download
+from visus.web.api.fields import Field
+from visus.web.api.frame_locator import FrameLocator
+from visus.web.api.locator import Locator
+from visus.web.api.page import Page
 from visus.web.async_api import (
     AsyncBrowser,
     AsyncContext,
     AsyncFrameLocator,
+    AsyncKeyboard,
     AsyncLocator,
     AsyncLocatorAssertions,
+    AsyncMouse,
     AsyncPage,
     expect,
+    rpa,
 )
 
 # ---------------------------------------------------------------------------
@@ -286,7 +301,7 @@ def test_async_page_locator_returns_async_locator() -> None:
     ap = AsyncPage(p)
     result = ap.locator("div")
     assert isinstance(result, AsyncLocator)
-    p.locator.assert_called_once_with("div")
+    p.locator.assert_called_once_with("div", deep=False)
 
 
 def test_async_page_get_by_role() -> None:
@@ -365,7 +380,7 @@ def test_async_frame_locator_locator() -> None:
     afl = AsyncFrameLocator(fl)
     result = afl.locator("button")
     assert isinstance(result, AsyncLocator)
-    fl.locator.assert_called_once_with("button")
+    fl.locator.assert_called_once_with("button", deep=False)
 
 
 def test_async_frame_locator_get_by_role() -> None:
@@ -766,3 +781,444 @@ def test_expect_wraps_sync_expect() -> None:
         result = expect(al)
     assert isinstance(result, AsyncLocatorAssertions)
     mock_expect.assert_called_once_with(loc)
+
+
+# ---------------------------------------------------------------------------
+# AsyncBrowser.contexts (zero-I/O property)
+# ---------------------------------------------------------------------------
+
+
+def test_async_browser_contexts_property() -> None:
+    sync_browser = MagicMock()
+    sync_browser.contexts = [MagicMock(), MagicMock()]
+    ab = AsyncBrowser(sync_browser)
+    result = ab.contexts
+    assert len(result) == 2
+    assert all(isinstance(c, AsyncContext) for c in result)
+
+
+# ---------------------------------------------------------------------------
+# AsyncContext.pages / adopt_open_windows (browser I/O → async)
+# ---------------------------------------------------------------------------
+
+
+async def test_async_context_pages() -> None:
+    sync_ctx = MagicMock()
+    sync_ctx.pages = [MagicMock(), MagicMock()]
+    ac = AsyncContext(sync_ctx)
+    result = await ac.pages()
+    assert len(result) == 2
+    assert all(isinstance(p, AsyncPage) for p in result)
+
+
+async def test_async_context_adopt_open_windows() -> None:
+    sync_ctx = MagicMock()
+    sync_ctx.adopt_open_windows.return_value = [MagicMock()]
+    ac = AsyncContext(sync_ctx)
+    result = await ac.adopt_open_windows()
+    assert len(result) == 1
+    assert isinstance(result[0], AsyncPage)
+    sync_ctx.adopt_open_windows.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# AsyncPage — zero-I/O accessors (sync properties)
+# ---------------------------------------------------------------------------
+
+
+def test_async_page_is_closed_property() -> None:
+    p = _make_page()
+    p.is_closed = True
+    assert AsyncPage(p).is_closed is True
+
+
+def test_async_page_handle_property() -> None:
+    p = _make_page()
+    p.handle = "window-1"
+    assert AsyncPage(p).handle == "window-1"
+
+
+def test_async_page_context_property() -> None:
+    p = _make_page()
+    p.context = MagicMock()
+    ctx = AsyncPage(p).context
+    assert isinstance(ctx, AsyncContext)
+    assert ctx._c is p.context
+
+
+def test_async_page_mouse_property() -> None:
+    p = _make_page()
+    assert isinstance(AsyncPage(p).mouse, AsyncMouse)
+
+
+def test_async_page_keyboard_property() -> None:
+    p = _make_page()
+    assert isinstance(AsyncPage(p).keyboard, AsyncKeyboard)
+
+
+def test_async_page_locator_deep_forwarded() -> None:
+    p = _make_page()
+    ap = AsyncPage(p)
+    assert isinstance(ap.locator("div", deep=True), AsyncLocator)
+    p.locator.assert_called_once_with("div", deep=True)
+
+
+# ---------------------------------------------------------------------------
+# AsyncPage — window focus (browser I/O → async)
+# ---------------------------------------------------------------------------
+
+
+async def test_async_page_bring_to_front() -> None:
+    p = _make_page()
+    await AsyncPage(p).bring_to_front()
+    p.bring_to_front.assert_called_once()
+
+
+async def test_async_page_activate() -> None:
+    p = _make_page()
+    await AsyncPage(p).activate()
+    p.activate.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# AsyncPage — field enumerator
+# ---------------------------------------------------------------------------
+
+
+async def test_async_page_list_fields() -> None:
+    p = _make_page()
+    sentinel = [MagicMock()]
+    p.list_fields.return_value = sentinel
+    result = await AsyncPage(p).list_fields(kinds=["input"], include_hidden=True, highlight=False)
+    assert result is sentinel
+    p.list_fields.assert_called_once_with(
+        kinds=["input"], include_hidden=True, highlight=False
+    )
+
+
+def test_async_page_field_returns_async_locator() -> None:
+    p = _make_page()
+    p.field.return_value = MagicMock()
+    result = AsyncPage(p).field(3)
+    assert isinstance(result, AsyncLocator)
+    p.field.assert_called_once_with(3)
+
+
+def test_async_page_field_locator_returns_async_locator() -> None:
+    p = _make_page()
+    p.field_locator.return_value = MagicMock()
+    field = MagicMock()
+    result = AsyncPage(p).field_locator(field)
+    assert isinstance(result, AsyncLocator)
+    p.field_locator.assert_called_once_with(field)
+
+
+async def test_async_page_clear_highlights() -> None:
+    p = _make_page()
+    await AsyncPage(p).clear_highlights()
+    p.clear_highlights.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# AsyncPage — vision (solve_captcha)
+# ---------------------------------------------------------------------------
+
+
+async def test_async_page_solve_captcha() -> None:
+    p = _make_page()
+    p.solve_captcha.return_value = "AB12"
+    target_loc = _make_loc()
+    target = AsyncLocator(target_loc)
+    result = await AsyncPage(p).solve_captcha(target, preprocess=False)
+    assert result == "AB12"
+    p.solve_captcha.assert_called_once_with(target_loc, preprocess=False)
+
+
+# ---------------------------------------------------------------------------
+# AsyncPage — event-capture context managers
+# ---------------------------------------------------------------------------
+
+
+def _make_eventful_page() -> MagicMock:
+    """A page mock exposing the private _delegate / _defaults the async event
+    context managers reach into (mirroring the sync Page internals)."""
+    p = MagicMock()
+    p._defaults = MagicMock(action_timeout_ms=5000)
+    p._delegate = MagicMock()
+    return p
+
+
+async def test_async_page_expect_popup() -> None:
+    p = _make_eventful_page()
+    p._delegate.snapshot_handles.return_value = ["w0"]
+    new_delegate = MagicMock()
+    p._delegate.adopt_new_handle.return_value = new_delegate
+    ap = AsyncPage(p)
+    async with ap.expect_popup(timeout=1234) as popup:
+        pass
+    p._delegate.snapshot_handles.assert_called_once()
+    p._delegate.adopt_new_handle.assert_called_once_with(["w0"], timeout_ms=1234)
+    assert isinstance(popup.value, AsyncPage)
+
+
+async def test_async_page_expect_popup_skips_adopt_on_error() -> None:
+    p = _make_eventful_page()
+    p._delegate.snapshot_handles.return_value = ["w0"]
+    ap = AsyncPage(p)
+    with pytest.raises(RuntimeError):
+        async with ap.expect_popup():
+            raise RuntimeError("trigger failed")
+    # body raised → the wait/adopt after the yield must not run
+    p._delegate.adopt_new_handle.assert_not_called()
+
+
+async def test_async_page_expect_dialog() -> None:
+    p = _make_eventful_page()
+    p._delegate.handle_next_dialog.return_value = ("Are you sure?", "confirm")
+    ap = AsyncPage(p)
+    async with ap.expect_dialog(accept=False, prompt_text="x", timeout=999) as dlg:
+        pass
+    p._delegate.handle_next_dialog.assert_called_once_with(
+        accept=False, prompt_text="x", timeout_ms=999
+    )
+    assert isinstance(dlg.value, Dialog)
+    assert dlg.value.message == "Are you sure?"
+    assert dlg.value.type == "confirm"
+
+
+async def test_async_page_expect_download() -> None:
+    p = _make_eventful_page()
+    p._delegate.snapshot_download_dir.return_value = []
+    p._delegate.wait_for_download.return_value = ("/tmp/report.pdf", "report.pdf")
+    ap = AsyncPage(p)
+    async with ap.expect_download(timeout=4321) as dl:
+        pass
+    p._delegate.wait_for_download.assert_called_once_with([], timeout_ms=4321)
+    assert isinstance(dl.value, Download)
+    assert dl.value.path == "/tmp/report.pdf"
+    assert dl.value.suggested_filename == "report.pdf"
+
+
+# ---------------------------------------------------------------------------
+# AsyncMouse
+# ---------------------------------------------------------------------------
+
+
+async def test_async_mouse_move() -> None:
+    m = MagicMock()
+    await AsyncMouse(m).move(10.0, 20.0)
+    m.move.assert_called_once_with(10.0, 20.0)
+
+
+async def test_async_mouse_down_up() -> None:
+    m = MagicMock()
+    am = AsyncMouse(m)
+    await am.down()
+    await am.up()
+    m.down.assert_called_once()
+    m.up.assert_called_once()
+
+
+async def test_async_mouse_click_dblclick() -> None:
+    m = MagicMock()
+    am = AsyncMouse(m)
+    await am.click(1.0, 2.0)
+    await am.dblclick(3.0, 4.0)
+    m.click.assert_called_once_with(1.0, 2.0)
+    m.dblclick.assert_called_once_with(3.0, 4.0)
+
+
+async def test_async_mouse_wheel() -> None:
+    m = MagicMock()
+    await AsyncMouse(m).wheel(0.0, -120.0)
+    m.wheel.assert_called_once_with(0.0, -120.0)
+
+
+# ---------------------------------------------------------------------------
+# AsyncKeyboard
+# ---------------------------------------------------------------------------
+
+
+async def test_async_keyboard_down_up() -> None:
+    k = MagicMock()
+    ak = AsyncKeyboard(k)
+    await ak.down("Shift")
+    await ak.up("Shift")
+    k.down.assert_called_once_with("Shift")
+    k.up.assert_called_once_with("Shift")
+
+
+async def test_async_keyboard_press() -> None:
+    k = MagicMock()
+    await AsyncKeyboard(k).press("Control+a")
+    k.press.assert_called_once_with("Control+a")
+
+
+async def test_async_keyboard_type() -> None:
+    k = MagicMock()
+    await AsyncKeyboard(k).type("hello")
+    k.type.assert_called_once_with("hello")
+
+
+async def test_async_keyboard_insert_text() -> None:
+    k = MagicMock()
+    await AsyncKeyboard(k).insert_text("世界")
+    k.insert_text.assert_called_once_with("世界")
+
+
+# ---------------------------------------------------------------------------
+# AsyncFrameLocator / AsyncLocator — deep selector forwarding
+# ---------------------------------------------------------------------------
+
+
+def test_async_frame_locator_locator_deep() -> None:
+    fl = _make_frame_loc()
+    afl = AsyncFrameLocator(fl)
+    assert isinstance(afl.locator("x", deep=True), AsyncLocator)
+    fl.locator.assert_called_once_with("x", deep=True)
+
+
+def test_async_locator_locator_deep() -> None:
+    loc = _make_loc()
+    al = AsyncLocator(loc)
+    assert isinstance(al.locator("x", deep=True), AsyncLocator)
+    loc.locator.assert_called_once_with("x", deep=True)
+
+
+# ---------------------------------------------------------------------------
+# Async rpa() — batteries-included session
+# ---------------------------------------------------------------------------
+
+
+def _patched_rpa_env(tmp_path: object):
+    """Patch launch + tracing + _print_summary for a browserless rpa() run."""
+    fake_page = MagicMock()
+    fake_browser = MagicMock()
+    fake_browser.new_page = AsyncMock(return_value=fake_page)
+    fake_browser.close = AsyncMock()
+    rec_cm = MagicMock()
+    rec_cm.__exit__.return_value = False
+    patches = (
+        patch("visus.web.async_api.launch", new=AsyncMock(return_value=fake_browser)),
+        patch("visus.web.async_api.tracing"),
+        patch("visus.web.async_api._print_summary"),
+    )
+    return fake_page, fake_browser, rec_cm, patches
+
+
+async def test_async_rpa_happy_path(tmp_path: object) -> None:
+    fake_page, fake_browser, rec_cm, patches = _patched_rpa_env(tmp_path)
+    p_launch, p_tracing, p_summary = patches
+    with p_launch as mlaunch, p_tracing as mtracing, p_summary as msummary:
+        mtracing.record.return_value = rec_cm
+        async with rpa("login", outdir=str(tmp_path)) as page:
+            assert page is fake_page
+    mlaunch.assert_awaited_once()
+    fake_browser.new_page.assert_awaited_once()
+    fake_browser.close.assert_awaited_once()
+    msummary.assert_called_once()
+
+
+async def test_async_rpa_failure_exits(tmp_path: object) -> None:
+    _, fake_browser, rec_cm, patches = _patched_rpa_env(tmp_path)
+    p_launch, p_tracing, p_summary = patches
+    with p_launch, p_tracing as mtracing, p_summary:
+        mtracing.record.return_value = rec_cm
+        with pytest.raises(SystemExit):
+            async with rpa("login", outdir=str(tmp_path)):
+                raise errors.VisusWebError("boom")
+    # the browser is still closed on the failure path
+    fake_browser.close.assert_awaited_once()
+
+
+async def test_async_rpa_failure_reraise(tmp_path: object) -> None:
+    _, _, rec_cm, patches = _patched_rpa_env(tmp_path)
+    p_launch, p_tracing, p_summary = patches
+    with p_launch, p_tracing as mtracing, p_summary:
+        mtracing.record.return_value = rec_cm
+        with pytest.raises(errors.VisusWebError):
+            async with rpa("login", outdir=str(tmp_path), reraise=True):
+                raise errors.VisusWebError("boom")
+
+
+async def test_async_rpa_open_report(tmp_path: object) -> None:
+    _, _, rec_cm, patches = _patched_rpa_env(tmp_path)
+    p_launch, p_tracing, p_summary = patches
+    with p_launch, p_tracing as mtracing, p_summary, patch(
+        "visus.web.async_api.webbrowser"
+    ) as mweb:
+        mtracing.record.return_value = rec_cm
+        async with rpa("login", outdir=str(tmp_path), open_report=True):
+            pass
+    mweb.open.assert_called_once()
+
+
+async def test_async_rpa_open_report_swallows_error(tmp_path: object) -> None:
+    _, _, rec_cm, patches = _patched_rpa_env(tmp_path)
+    p_launch, p_tracing, p_summary = patches
+    with p_launch, p_tracing as mtracing, p_summary, patch(
+        "visus.web.async_api.webbrowser"
+    ) as mweb:
+        mtracing.record.return_value = rec_cm
+        mweb.open.side_effect = RuntimeError("no browser available")
+        # an open_report failure must never break the run teardown
+        async with rpa("login", outdir=str(tmp_path), open_report=True):
+            pass
+
+
+# ---------------------------------------------------------------------------
+# Surface-parity guard — every public sync member has an async counterpart
+# ---------------------------------------------------------------------------
+
+
+_SURFACE_PAIRS = [
+    (Browser, AsyncBrowser),
+    (Context, AsyncContext),
+    (Page, AsyncPage),
+    (Locator, AsyncLocator),
+    (FrameLocator, AsyncFrameLocator),
+    (LocatorAssertions, AsyncLocatorAssertions),
+]
+
+
+def _public_names(cls: type) -> set[str]:
+    return {n for n in dir(cls) if not n.startswith("_")}
+
+
+@pytest.mark.parametrize("sync_cls, async_cls", _SURFACE_PAIRS)
+def test_async_surface_covers_sync(sync_cls: type, async_cls: type) -> None:
+    missing = _public_names(sync_cls) - _public_names(async_cls)
+    assert not missing, f"{async_cls.__name__} is missing sync members: {sorted(missing)}"
+
+
+def _param_names(func: object) -> list[str]:
+    return [p for p in inspect.signature(func).parameters if p != "self"]
+
+
+@pytest.mark.parametrize("sync_cls, async_cls", _SURFACE_PAIRS)
+def test_async_keyword_parity(sync_cls: type, async_cls: type) -> None:
+    """Methods shared by a sync class and its async mirror must accept the SAME
+    parameter names, so keyword calls port across unchanged — e.g.
+    fill(value=...), to_have_text(expected=...), get_by_test_id(test_id=...)."""
+    drift = []
+    for name in _public_names(sync_cls) & _public_names(async_cls):
+        s_attr = inspect.getattr_static(sync_cls, name)
+        a_attr = inspect.getattr_static(async_cls, name)
+        # Compare only members that are plain functions/coroutines on BOTH sides
+        # (properties have no call signature and are skipped).
+        if not (inspect.isfunction(s_attr) and inspect.isfunction(a_attr)):
+            continue
+        s_params, a_params = _param_names(s_attr), _param_names(a_attr)
+        if s_params != a_params:
+            drift.append(f"{name}: sync{s_params} != async{a_params}")
+    assert not drift, f"{async_cls.__name__} keyword-arg drift: {drift}"
+
+
+def test_async_module_reexports() -> None:
+    import visus.web.async_api as amod
+
+    for name in ("launch", "rpa", "expect", "Engine", "errors", "tracing"):
+        assert hasattr(amod, name), f"async_api is missing top-level export: {name}"
+    assert amod.Field is Field
+    assert amod.Dialog is Dialog
+    assert amod.Download is Download
