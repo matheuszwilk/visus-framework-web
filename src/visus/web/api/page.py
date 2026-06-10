@@ -1,9 +1,14 @@
 from __future__ import annotations
 
-from collections.abc import Generator
+import fnmatch
+import re
+from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from pathlib import Path
+from time import monotonic, sleep
 from typing import TYPE_CHECKING, Any, cast
+
+from visus.web import errors
 
 from visus.web.api._steps import run_step
 from visus.web.api.events import Dialog, Download, _ValueHolder
@@ -71,6 +76,70 @@ class Page:
 
     def close(self) -> None:
         self._delegate.close()
+
+    # --- web-first synchronization ---
+
+    def _poll_until(self, check: Callable[[], bool], timeout_ms: int, what: str) -> None:
+        deadline = monotonic() + timeout_ms / 1000
+        while True:
+            if check():
+                return
+            if monotonic() >= deadline:
+                raise errors.VisusTimeoutError(f"{what} not satisfied within {timeout_ms}ms")
+            sleep(0.1)
+
+    def wait_for_url(
+        self,
+        url: str | re.Pattern[str] | Callable[[str], bool],
+        *,
+        timeout: int | None = None,
+    ) -> None:
+        """Wait until :attr:`url` matches *url* — a glob string (``"*checkout*"``),
+        a compiled regex (``re.search``), or a predicate over the current URL."""
+        t = timeout if timeout is not None else self._defaults.navigation_timeout_ms
+        if isinstance(url, re.Pattern):
+            check: Callable[[], bool] = lambda: bool(url.search(self._delegate.current_url()))
+        elif callable(url):
+            check = lambda: bool(url(self._delegate.current_url()))
+        else:
+            check = lambda: (
+                fnmatch.fnmatch(self._delegate.current_url(), url)
+                or self._delegate.current_url() == url
+            )
+        self._poll_until(check, t, f"wait_for_url({url!r})")
+
+    def wait_for_load_state(self, state: str = "load", *, timeout: int | None = None) -> None:
+        """Wait for ``document.readyState``: ``"load"`` (complete) or
+        ``"domcontentloaded"`` (interactive or complete)."""
+        if state not in ("load", "domcontentloaded"):
+            raise ValueError("state must be 'load' or 'domcontentloaded'")
+        want = ("complete",) if state == "load" else ("interactive", "complete")
+        t = timeout if timeout is not None else self._defaults.navigation_timeout_ms
+        self._poll_until(
+            lambda: self._delegate.evaluate("() => document.readyState", None) in want,
+            t,
+            f"wait_for_load_state({state!r})",
+        )
+
+    def wait_for_function(
+        self, expression: str, arg: object = None, *, timeout: int | None = None
+    ) -> object:
+        """Poll *expression* (a JS function) until it returns a truthy value;
+        return that value."""
+        t = timeout if timeout is not None else self._defaults.action_timeout_ms
+        result: list[object] = [None]
+
+        def check() -> bool:
+            result[0] = self._delegate.evaluate(expression, arg)
+            return bool(result[0])
+
+        self._poll_until(check, t, f"wait_for_function({expression!r})")
+        return result[0]
+
+    def wait_for_timeout(self, timeout: float) -> None:
+        """Sleep for *timeout* milliseconds. Discouraged — prefer web-first waits
+        (:meth:`wait_for_url`, ``locator.wait_for``, ``expect``)."""
+        sleep(timeout / 1000)
 
     @property
     def is_closed(self) -> bool:

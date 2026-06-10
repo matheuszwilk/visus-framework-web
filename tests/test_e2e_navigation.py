@@ -182,3 +182,39 @@ def test_rpa_page_exposes_context_for_tab_navigation(base_url, tmp_path):
         page.evaluate(OPEN_FORMS_JS)
         pages = _wait_pages(ctx, 2)
         assert any(p.url.endswith("/forms.html") for p in pages)
+
+
+@pytest.mark.browser
+def test_wait_for_url_glob_regex_predicate(browser, base_url):
+    import re
+
+    from visus.web import errors
+
+    page = browser.new_page()
+    page.goto(f"{base_url}/forms.html")
+    page.wait_for_url("*forms.html")
+    page.wait_for_url(re.compile(r"forms\.html$"))
+    page.wait_for_url(lambda u: u.endswith("forms.html"))
+    with pytest.raises(errors.VisusTimeoutError):
+        page.wait_for_url("*never-this-url*", timeout=400)
+    # a navigation triggered in-page is awaited
+    page.evaluate("() => setTimeout(() => { location.href = '/page2.html'; }, 150)")
+    page.wait_for_url("*page2*", timeout=10_000)
+    assert page.url.endswith("/page2.html")
+
+
+@pytest.mark.browser
+def test_wait_for_load_state_and_function_and_timeout(browser, base_url):
+    page = browser.new_page()
+    page.goto(f"{base_url}/forms.html")
+    page.wait_for_load_state()
+    page.wait_for_load_state("domcontentloaded")
+    with pytest.raises(ValueError):
+        page.wait_for_load_state("networkidle")
+    page.evaluate("() => setTimeout(() => { window.__flag = 'done'; }, 150)")
+    assert page.wait_for_function("() => window.__flag") == "done"
+    import time as _t
+
+    t0 = _t.monotonic()
+    page.wait_for_timeout(120)
+    assert _t.monotonic() - t0 >= 0.1
