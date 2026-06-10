@@ -1224,3 +1224,159 @@ def test_async_module_reexports() -> None:
     assert amod.Field is Field
     assert amod.Dialog is Dialog
     assert amod.Download is Download
+
+
+# ---------------------------------------------------------------------------
+# 0.1.0 surface — mock-level wiring for the new wrappers
+# ---------------------------------------------------------------------------
+
+
+async def test_async_page_wait_wrappers() -> None:
+    p = MagicMock()
+    ap = AsyncPage(p)
+    ap.set_default_timeout(5)
+    p.set_default_timeout.assert_called_once_with(5)
+    ap.set_default_navigation_timeout(7)
+    p.set_default_navigation_timeout.assert_called_once_with(7)
+    await ap.wait_for_url("*x*")
+    p.wait_for_url.assert_called_once_with("*x*", timeout=None)
+    await ap.wait_for_load_state("domcontentloaded", timeout=9)
+    p.wait_for_load_state.assert_called_once_with("domcontentloaded", timeout=9)
+    await ap.wait_for_function("() => 1", 2, timeout=3)
+    p.wait_for_function.assert_called_once_with("() => 1", 2, timeout=3)
+    await ap.wait_for_timeout(1)
+
+
+async def test_async_page_network_and_emulation_wrappers() -> None:
+    p = MagicMock()
+    ap = AsyncPage(p)
+    p.network_requests.return_value = []
+    assert await ap.network_requests() == []
+    p.console_messages.return_value = []
+    assert await ap.console_messages() == []
+    resp = MagicMock()
+    resp.url, resp.status, resp.method, resp.resource_type = "u", 200, "GET", "xhr"
+    p.wait_for_response.return_value = resp
+    got = await ap.wait_for_response("*u*", timeout=5)
+    assert got.url == "u" and got.status == 200
+    await ap.add_init_script("x")
+    p.add_init_script.assert_called_once_with("x")
+    await ap.set_geolocation(1.0, 2.0, accuracy=50)
+    p.set_geolocation.assert_called_once_with(1.0, 2.0, accuracy=50)
+    await ap.grant_permissions(["geolocation"], origin="http://x")
+    p.grant_permissions.assert_called_once_with(["geolocation"], origin="http://x")
+    await ap.set_device_metrics(390, 844, device_scale_factor=3.0, mobile=True)
+    p.set_device_metrics.assert_called_once_with(
+        390, 844, device_scale_factor=3.0, mobile=True
+    )
+    await ap.set_viewport_size(800, 600)
+    p.set_viewport_size.assert_called_once_with(800, 600)
+
+
+async def test_async_expect_response_context_manager() -> None:
+    from visus.web.api.events import NetworkResponse
+
+    p = MagicMock()
+    p._defaults.action_timeout_ms = 100
+    p._delegate.network_marker.return_value = 3
+    p._delegate.wait_for_response.return_value = {
+        "url": "u", "status": 201, "method": "POST", "resource_type": "xhr",
+        "request_id": "9",
+    }
+    ap = AsyncPage(p)
+    async with ap.expect_response("*u*") as info:
+        pass
+    assert info.value.status == 201
+    assert isinstance(info.value._r, NetworkResponse)
+    p._delegate.wait_for_response.assert_called_once_with(
+        "*u*", timeout_ms=100, from_index=3
+    )
+
+
+async def test_async_network_response_wrapper() -> None:
+    from visus.web.api.events import NetworkResponse
+    from visus.web.async_api import AsyncNetworkResponse
+
+    delegate = MagicMock()
+    delegate.response_body.return_value = "BODY"
+    r = NetworkResponse(
+        delegate,
+        {"url": "u", "status": 200, "method": "GET", "resource_type": "fetch", "request_id": "1"},
+    )
+    ar = AsyncNetworkResponse(r)
+    assert ar.ok is True
+    assert await ar.body() == "BODY"
+    delegate.response_body.assert_called_once_with("1")
+    assert "AsyncNetworkResponse" in repr(ar)
+
+
+async def test_async_page_assertions_wrap_sync() -> None:
+    a = MagicMock()
+    apa = AsyncPageAssertions(a)
+    await apa.to_have_url("*x*")
+    a.to_have_url.assert_called_once_with("*x*", timeout=None)
+    await apa.to_have_title("t", timeout=5)
+    a.to_have_title.assert_called_once_with("t", timeout=5)
+    assert isinstance(apa.not_, AsyncPageAssertions)
+
+
+async def test_async_locator_new_wrappers() -> None:
+    loc = _make_loc()
+    al = AsyncLocator(loc)
+    await al.wait_for(state="hidden", timeout=5)
+    loc.wait_for.assert_called_once_with(state="hidden", timeout=5)
+    await al.inner_text()
+    await al.inner_html()
+    await al.all_inner_texts()
+    await al.bounding_box()
+    await al.dispatch_event("change", {"bubbles": False})
+    loc.dispatch_event.assert_called_once_with("change", {"bubbles": False})
+    await al.scroll_into_view_if_needed()
+    await al.highlight()
+    await al.press_sequentially("ab", delay=1, timeout=2, backtrack=False)
+    loc.press_sequentially.assert_called_once_with("ab", delay=1, timeout=2, backtrack=False)
+    al.or_(AsyncLocator(loc))
+    loc.or_.assert_called_once()
+    al.and_(AsyncLocator(loc))
+    loc.and_.assert_called_once()
+    al.filter(has_text="x", has_not_text="y", has=AsyncLocator(loc), has_not=AsyncLocator(loc))
+    loc.filter.assert_called_once()
+
+
+async def test_async_locator_assertions_new_matchers() -> None:
+    a = MagicMock()
+    aa = AsyncLocatorAssertions(a)
+    await aa.to_be_attached()
+    await aa.to_be_focused()
+    await aa.to_be_empty()
+    await aa.to_be_in_viewport()
+    await aa.to_have_css("display", "block", timeout=5)
+    a.to_have_css.assert_called_once_with("display", "block", timeout=5)
+    await aa.to_have_id("user")
+    a.to_have_id.assert_called_once_with("user", timeout=None)
+    await aa.to_have_values(["a", "b"])
+    a.to_have_values.assert_called_once_with(["a", "b"], timeout=None)
+
+
+async def test_async_context_new_wrappers() -> None:
+    c = MagicMock()
+    ac = AsyncContext(c)
+    ac.set_default_timeout(5)
+    c.set_default_timeout.assert_called_once_with(5)
+    ac.set_default_navigation_timeout(6)
+    c.set_default_navigation_timeout.assert_called_once_with(6)
+    c.storage_state.return_value = {"cookies": [], "origins": []}
+    assert await ac.storage_state(path=None) == {"cookies": [], "origins": []}
+    await ac.restore_storage_state({"cookies": []})
+    c.restore_storage_state.assert_called_once_with({"cookies": []})
+
+
+async def test_async_expect_dispatches_page_and_soft() -> None:
+    from visus.web.async_api import expect as aexpect
+
+    ap = AsyncPage(MagicMock())
+    assert isinstance(aexpect(ap), AsyncPageAssertions)
+    assert isinstance(aexpect.soft(ap, "ctx"), AsyncPageAssertions)
+    al = AsyncLocator(_make_loc())
+    assert isinstance(aexpect.soft(al), AsyncLocatorAssertions)
+    aexpect.verify_soft()  # nothing collected — must not raise

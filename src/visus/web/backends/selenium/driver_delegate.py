@@ -8,7 +8,7 @@ import json
 import os
 import re
 import time
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from selenium.common.exceptions import (
     NoSuchWindowException,
@@ -966,7 +966,8 @@ class SeleniumPageDelegate:
         loggingPrefs) simply contribute nothing.
         """
         try:
-            perf = self._driver.get_log("performance")
+            # get_log is a Chromium driver extension (absent from the WebDriver stubs)
+            perf = cast(Any, self._driver).get_log("performance")
         except Exception:
             perf = []
         for entry in perf:
@@ -1001,7 +1002,7 @@ class SeleniumPageDelegate:
                     if rec["request_id"] == rid:
                         rec["finished"] = True
         try:
-            browser_log = self._driver.get_log("browser")
+            browser_log = cast(Any, self._driver).get_log("browser")
         except Exception:
             browser_log = []
         for entry in browser_log:
@@ -1029,7 +1030,7 @@ class SeleniumPageDelegate:
         return len(self._net_buffer)
 
     @staticmethod
-    def _url_matcher(url_pattern: str) -> "re.Pattern[str] | None":
+    def _url_matcher(url_pattern: str) -> re.Pattern[str] | None:
         if any(ch in url_pattern for ch in "*?["):
             return re.compile(fnmatch.translate(url_pattern))
         return None

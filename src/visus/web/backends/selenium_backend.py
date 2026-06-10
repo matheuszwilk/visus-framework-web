@@ -71,10 +71,7 @@ def _spawn_driver(
     )
     try:
         if remote_url is not None:
-            driver = cast(
-                WebDriver,
-                webdriver.Remote(command_executor=remote_url, options=options),  # type: ignore[arg-type]
-            )
+            driver = webdriver.Remote(command_executor=remote_url, options=options)  # type: ignore[arg-type]
         else:
             service = config.service_factory()
             driver = cast(WebDriver, config.driver_factory(options=options, service=service))

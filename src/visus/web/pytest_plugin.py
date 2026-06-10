@@ -92,7 +92,7 @@ def pytest_runtest_makereport(
     item: pytest.Item, call: pytest.CallInfo[None]
 ) -> Generator[None, Any, None]:
     outcome = yield
-    rep = outcome.get_result()  # type: ignore[attr-defined]
+    rep = outcome.get_result()
     if rep.when == "call":
         item._visus_rep_call = rep  # type: ignore[attr-defined]
 
@@ -111,5 +111,5 @@ def pytest_runtest_call(item: pytest.Item) -> Generator[None, Any, None]:
     try:
         verify_soft()
     except AssertionError:
-        if outcome.excinfo is None:  # type: ignore[attr-defined]
+        if outcome.excinfo is None:
             raise

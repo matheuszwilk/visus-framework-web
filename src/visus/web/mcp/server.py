@@ -580,7 +580,7 @@ def browser_network_requests(url_filter: str = "") -> list[dict]:  # type: ignor
         for r in page.network_requests()
     ]
     if url_filter:
-        out = [r for r in out if url_filter in r["url"]]
+        out = [r for r in out if url_filter in str(r["url"])]
     return out
 
 

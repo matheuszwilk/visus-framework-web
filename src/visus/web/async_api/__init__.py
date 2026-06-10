@@ -209,7 +209,7 @@ def expect(
     """
     if isinstance(target, AsyncPage):
         return AsyncPageAssertions(PageAssertions(target._p, message=message))
-    return AsyncLocatorAssertions(_sync_expect(target._loc, message))  # type: ignore[arg-type]
+    return AsyncLocatorAssertions(_sync_expect(target._loc, message))
 
 
 def _soft_expect(
@@ -401,7 +401,7 @@ class AsyncPage:
 
     async def wait_for_url(
         self,
-        url: "str | re.Pattern[str] | Callable[[str], bool]",
+        url: str | re.Pattern[str] | Callable[[str], bool],
         *,
         timeout: int | None = None,
     ) -> None:
@@ -1166,7 +1166,7 @@ class AsyncLocatorAssertions:
         await asyncio.to_thread(lambda: self._a.to_have_id(id, timeout=timeout))
 
     async def to_have_values(
-        self, values: "Sequence[str]", *, timeout: int | None = None
+        self, values: Sequence[str], *, timeout: int | None = None
     ) -> None:
         await asyncio.to_thread(lambda: self._a.to_have_values(values, timeout=timeout))
 
@@ -1187,11 +1187,11 @@ class AsyncPageAssertions:
         return AsyncPageAssertions(self._a.not_)
 
     async def to_have_url(
-        self, url: "str | re.Pattern[str]", *, timeout: int | None = None
+        self, url: str | re.Pattern[str], *, timeout: int | None = None
     ) -> None:
         await asyncio.to_thread(lambda: self._a.to_have_url(url, timeout=timeout))
 
     async def to_have_title(
-        self, title: "str | re.Pattern[str]", *, timeout: int | None = None
+        self, title: str | re.Pattern[str], *, timeout: int | None = None
     ) -> None:
         await asyncio.to_thread(lambda: self._a.to_have_title(title, timeout=timeout))

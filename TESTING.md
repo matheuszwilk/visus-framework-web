@@ -28,15 +28,11 @@ uv run pytest tests/test_e2e_locators.py -m browser --no-cov
 `tests/test_e2e_edge_ie.py` drives **Edge in IE/Trident mode** via a local `IEDriverServer.exe` (gitignored; set `VISUS_WEB_IE_DRIVER` to its path — the test points to the repo-root copy automatically). Two caveats:
 
 1. **It is headed by necessity** — the IE/Trident engine has **no headless mode** (headless is a Chromium-only feature), so a visible Edge-IE window appears during the test.
-2. **It is flaky under parallel execution** — IE-mode needs window focus, and other headless browsers running in parallel steal it. **Run it serially**:
+2. **It hangs under parallel execution** — IE-mode needs window focus, and other headless browsers running in parallel steal it; the session then blocks in a way neither the launch watchdog nor pytest-timeout can interrupt. The test therefore **skips itself automatically under xdist** (it detects `PYTEST_XDIST_WORKER`). **Run it serially**:
    ```bash
    uv run pytest tests/test_e2e_edge_ie.py -n0 --no-cov -m browser
    ```
-
-For everyday runs, exclude it from the parallel suite:
-```bash
-uv run pytest -q --ignore=tests/test_e2e_edge_ie.py
-```
+3. **Only IEDriverServer 4.0.0 works** — 4.8+ (including the 4.14 Selenium Manager picks by default) hangs forever at `BrowserFactory.cpp Finding window handle for IE Mode on Edge`. `edge_ie.py` pins 4.0.0 via Selenium Manager; a repo-root `IEDriverServer.exe` (gitignored) or `VISUS_WEB_IE_DRIVER` overrides it, `VISUS_WEB_IE_DRIVER_VERSION` re-pins.
 
 ## Browsers covered
 

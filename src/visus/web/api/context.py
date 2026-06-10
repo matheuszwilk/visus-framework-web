@@ -61,9 +61,12 @@ class Context:
         Navigate a page to the target origin first; cookies only apply to the
         currently-loaded domain and web storage is per-origin.
         """
-        if isinstance(state, str):
-            state = json.loads(Path(state).read_text(encoding="utf-8"))
-        self._delegate.restore_storage_state(state)
+        data: dict = (  # type: ignore[type-arg]
+            json.loads(Path(state).read_text(encoding="utf-8"))
+            if isinstance(state, str)
+            else state
+        )
+        self._delegate.restore_storage_state(data)
 
     def cookies(self) -> list[dict]:  # type: ignore[type-arg]
         return self._delegate.cookies()

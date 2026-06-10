@@ -4,7 +4,7 @@ import fnmatch
 import re
 from collections.abc import Callable, Sequence
 from time import monotonic, sleep
-from typing import TYPE_CHECKING, Union
+from typing import TYPE_CHECKING, overload
 
 if TYPE_CHECKING:
     from visus.web.api.locator import Locator, TextArg
@@ -219,9 +219,15 @@ class PageAssertions:
         self._poll(check, f"to_have_title({title!r})", timeout)
 
 
+@overload
+def expect(target: Locator, message: str | None = None) -> LocatorAssertions: ...
+@overload
+def expect(target: Page, message: str | None = None) -> PageAssertions: ...
+
+
 def expect(
     target: Locator | Page, message: str | None = None
-) -> Union[LocatorAssertions, PageAssertions]:
+) -> LocatorAssertions | PageAssertions:
     """Web-first assertion entry point.
 
     ``expect(locator).to_be_visible()``, ``expect(page).to_have_url(...)``.
@@ -238,7 +244,7 @@ def expect(
 
 def _soft_expect(
     target: Locator | Page, message: str | None = None
-) -> Union[LocatorAssertions, PageAssertions]:
+) -> LocatorAssertions | PageAssertions:
     """Soft variant of :func:`expect` — failures are collected, not raised."""
     from visus.web.api.page import Page
 

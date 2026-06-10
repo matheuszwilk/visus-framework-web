@@ -92,3 +92,88 @@ def test_build_action_error_without_wait_log_unchanged() -> None:
     driver.execute_script.return_value = []
     msg = build_action_error(driver, _sel({"kind": "css", "value": "#a"}), "fill", 100, "not found")
     assert "log:" not in msg
+
+
+def test_describe_composed_and_frame_and_smart_steps() -> None:
+    inner = [{"kind": "css", "value": "input"}]
+    assert describe_target(_sel({"kind": "filter_has", "steps": inner})) == 'has(css "input")'
+    assert describe_target(_sel({"kind": "filter_has_not", "steps": inner})) == (
+        'has not(css "input")'
+    )
+    assert describe_target(_sel({"kind": "or", "steps": inner})) == 'or(css "input")'
+    assert describe_target(_sel({"kind": "and", "steps": inner})) == 'and(css "input")'
+    assert describe_target(_sel({"kind": "filter_has_not_text", "value": "x"})) == (
+        'filtered by NOT text "x"'
+    )
+    assert describe_target(_sel({"kind": "filter_has_text", "regex": "or.er"})) == (
+        'filtered by text "or.er"'
+    )
+    assert describe_target(_sel({"kind": "frame", "frame": inner})) == "inside frame"
+    smart = {"kind": "smart", "tag": "input", "candidates": [{"css": "#email"}]}
+    assert "pasted element" in describe_target(_sel(smart))
+    assert "#email" in describe_target(_sel(smart))
+
+
+def test_build_action_error_did_you_mean_suggestion() -> None:
+    from unittest.mock import MagicMock
+
+    from visus.web.backends.selenium._diagnostics import build_action_error
+
+    driver = MagicMock()
+    driver.title = "T"
+    driver.current_url = "u"
+    driver.execute_script.return_value = [
+        {"role": "button", "name": "Submit"},
+        {"role": "button", "name": "Cancel"},
+    ]
+    msg = build_action_error(
+        driver,
+        _sel({"kind": "role", "role": "button", "name": "Submot", "exact": False}),
+        "click",
+        100,
+        "not found",
+    )
+    assert "did you mean" in msg and "Submit" in msg
+
+
+def test_build_action_error_lists_available_roles_without_close_match() -> None:
+    from unittest.mock import MagicMock
+
+    from visus.web.backends.selenium._diagnostics import build_action_error
+
+    driver = MagicMock()
+    driver.title = "T"
+    driver.current_url = "u"
+    driver.execute_script.return_value = [{"role": "button", "name": "Totally Different"}]
+    msg = build_action_error(
+        driver,
+        _sel({"kind": "role", "role": "button", "name": "zzzz", "exact": False}),
+        "click",
+        100,
+        "not found",
+    )
+    assert "buttons on this page" in msg
+
+
+def test_build_action_error_text_step_suggestion_and_snapshot_failure() -> None:
+    from unittest.mock import MagicMock
+
+    from visus.web.backends.selenium._diagnostics import build_action_error
+
+    driver = MagicMock()
+    driver.title = "T"
+    driver.current_url = "u"
+    driver.execute_script.return_value = [{"role": "link", "name": "Sign in"}]
+    msg = build_action_error(
+        driver, _sel({"kind": "text", "value": "Sign im"}), "click", 100, "not found"
+    )
+    assert "did you mean" in msg
+
+    broken = MagicMock()
+    broken.title = "T"
+    broken.current_url = "u"
+    broken.execute_script.side_effect = RuntimeError("no page")
+    msg2 = build_action_error(
+        broken, _sel({"kind": "css", "value": "#a"}), "fill", 100, "not visible (hidden)"
+    )
+    assert "never became actionable" in msg2

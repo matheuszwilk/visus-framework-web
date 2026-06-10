@@ -92,3 +92,55 @@ def test_fixtures_screenshot_on_failure_and_soft(pytester: pytest.Pytester) -> N
     assert any("test_fails" in n for n in names), f"missing failure screenshot: {names}"
     # soft failure shows the collected message
     result.stdout.fnmatch_lines(["*1 soft assertion(s) failed*"])
+
+
+def test_visus_browser_fixture_body(monkeypatch: pytest.Monkeypatch | object) -> None:
+    from unittest.mock import MagicMock
+
+    import visus.web
+    import visus.web.pytest_plugin as plug
+
+    state: dict[str, object] = {}
+
+    class _B:
+        def close(self) -> None:
+            state["closed"] = True
+
+    def fake_launch(engine, *, headless):
+        state["args"] = (engine, headless)
+        return _B()
+
+    monkeypatch.setattr(visus.web, "launch", fake_launch)  # type: ignore[union-attr]
+    req = MagicMock()
+    req.config.getoption.side_effect = lambda k: {
+        "--visus-engine": "chrome",
+        "--visus-headed": False,
+    }[k]
+    gen = plug.visus_browser.__wrapped__(req)
+    next(gen)
+    assert state["args"] == ("chrome", True)  # headed=False -> headless=True
+    with pytest.raises(StopIteration):
+        next(gen)
+    assert state.get("closed") is True
+
+
+def test_visus_page_screenshot_failure_is_swallowed(tmp_path) -> None:
+    from unittest.mock import MagicMock
+
+    import visus.web.pytest_plugin as plug
+
+    page = MagicMock()
+    page.screenshot.side_effect = RuntimeError("browser already dead")
+    ctx = MagicMock()
+    ctx.new_page.return_value = page
+    req = MagicMock()
+    req.node.nodeid = "t.py::test_x"
+    rep = MagicMock()
+    rep.failed = True
+    req.node._visus_rep_call = rep
+    req.config.getoption.return_value = str(tmp_path / "shots")
+    gen = plug.visus_page.__wrapped__(ctx, req)
+    next(gen)
+    with pytest.raises(StopIteration):
+        next(gen)  # teardown must swallow the screenshot failure
+    page.screenshot.assert_called_once()

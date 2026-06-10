@@ -262,7 +262,8 @@ def test_expect_text_and_value_accept_regex():
     expect(loc).to_contain_text(re.compile("part"))
     expect(loc).to_have_value(re.compile(r"\d+"))
     expect(loc).to_have_attribute("href", re.compile("example"))
-    assert d.calls[0] == ("text", {"regex": "Hi", "flags": re.compile("Hi", re.IGNORECASE).flags}, False)
+    flags_i = re.compile("Hi", re.IGNORECASE).flags
+    assert d.calls[0] == ("text", {"regex": "Hi", "flags": flags_i}, False)
     assert d.calls[1] == ("text", {"regex": "part", "flags": re.compile("part").flags}, False)
     assert d.calls[2] == ("value", {"regex": r"\d+", "flags": re.compile(r"\d+").flags}, False)
     assert d.calls[3] == (
@@ -270,3 +271,21 @@ def test_expect_text_and_value_accept_regex():
         {"name": "href", "regex": "example", "flags": re.compile("example").flags},
         False,
     )
+
+
+def test_frame_locator_builders_and_xpath_frame_step():
+    from visus.web.api.frame_locator import FrameLocator, _frame_step
+
+    assert _frame_step("//ifr") == {
+        "kind": "frame",
+        "frame": [{"kind": "xpath", "value": "//ifr"}],
+    }
+    assert _frame_step("xpath=//f")["frame"] == [{"kind": "xpath", "value": "//f"}]
+    assert _frame_step("css=#f")["frame"] == [{"kind": "css", "value": "#f"}]
+
+    d = _RecordingDelegate()
+    fl = FrameLocator(d, (_frame_step("#f"),), _DEFAULTS)
+    assert _steps(fl.get_by_text("Hi"))[-1] == {"kind": "text", "value": "Hi", "exact": False}
+    assert _steps(fl.get_by_label("Email"))[-1]["kind"] == "label"
+    assert _steps(fl.get_by_test_id("row"))[-1] == {"kind": "testid", "value": "row"}
+    assert _steps(fl.get_by_role("button", name="Go"))[-1]["kind"] == "role"
