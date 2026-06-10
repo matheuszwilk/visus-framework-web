@@ -35,7 +35,16 @@ def _describe_step(step: dict[str, Any]) -> str:
     if kind in ("css", "xpath"):
         return f"{kind} {_q(step.get('value'))}"
     if kind == "filter_has_text":
-        return f"filtered by text {_q(step.get('value'))}"
+        return f"filtered by text {_q(step.get('value') or step.get('regex'))}"
+    if kind == "filter_has_not_text":
+        return f"filtered by NOT text {_q(step.get('value') or step.get('regex'))}"
+    if kind in ("filter_has", "filter_has_not", "or", "and"):
+        inner = step.get("steps") or []
+        parts = [_describe_step(s) for s in inner if isinstance(s, dict)]
+        label = {"filter_has": "has", "filter_has_not": "has not", "or": "or", "and": "and"}[
+            str(kind)
+        ]
+        return f"{label}({' » '.join(p for p in parts if p)})"
     if kind == "nth":
         idx = step.get("index")
         which = {0: "first", -1: "last"}.get(idx, f"index {idx}")  # type: ignore[arg-type]

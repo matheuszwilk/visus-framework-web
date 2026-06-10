@@ -35,6 +35,17 @@ def _text_step(kind: str, text: TextArg, exact: bool) -> dict[str, object]:
     return {"kind": kind, "value": text, "exact": exact}
 
 
+def _embed(other: Locator) -> list[dict[str, object]]:
+    """Steps of *other* for embedding into a composed step (filter_has / or / and).
+
+    Composition is evaluated inside a single document, so a locator that crosses
+    into an iframe cannot be embedded.
+    """
+    if any(s.get("kind") == "frame" for s in other._steps):
+        raise ValueError("cannot compose locators that cross into an iframe")
+    return list(other._steps)
+
+
 class Locator:
     """A lazy recipe: page delegate + immutable tuple of selector steps."""
 
@@ -115,10 +126,34 @@ class Locator:
 
         return FrameLocator(self._delegate, self._steps + (_frame_step(selector),), self._defaults)
 
-    def filter(self, *, has_text: TextArg | None = None) -> Locator:
+    def filter(
+        self,
+        *,
+        has_text: TextArg | None = None,
+        has_not_text: TextArg | None = None,
+        has: Locator | None = None,
+        has_not: Locator | None = None,
+    ) -> Locator:
+        """Narrow the matched set: by contained text (``has_text``/``has_not_text``)
+        and/or by a relative inner locator (``has``/``has_not``)."""
+        loc = self
         if has_text is not None:
-            return self._child(_text_step("filter_has_text", has_text, False))
-        return self
+            loc = loc._child(_text_step("filter_has_text", has_text, False))
+        if has_not_text is not None:
+            loc = loc._child(_text_step("filter_has_not_text", has_not_text, False))
+        if has is not None:
+            loc = loc._child({"kind": "filter_has", "steps": _embed(has)})
+        if has_not is not None:
+            loc = loc._child({"kind": "filter_has_not", "steps": _embed(has_not)})
+        return loc
+
+    def or_(self, other: Locator) -> Locator:
+        """Elements matching this locator OR *other* (union, document order)."""
+        return self._child({"kind": "or", "steps": _embed(other)})
+
+    def and_(self, other: Locator) -> Locator:
+        """Elements matching this locator AND *other* (intersection)."""
+        return self._child({"kind": "and", "steps": _embed(other)})
 
     def first(self) -> Locator:
         return self._child({"kind": "nth", "index": 0})

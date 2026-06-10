@@ -103,3 +103,30 @@ def test_regex_assertions(page):
     expect(page.locator("#user")).to_have_value(re.compile(r"^ad."))
     expect(page.locator("#user")).to_have_attribute("type", re.compile("te.t"))
     expect(page.get_by_label("Username")).not_.to_have_value(re.compile(r"^\d+$"))
+
+
+@pytest.mark.browser
+def test_filter_has_and_has_not(page):
+    # <ul id="items"> contains <li>s; only the list containing "beta" survives has=
+    items = page.locator("ul").filter(has=page.get_by_text("beta", exact=True))
+    assert items.count() == 1
+    assert items.get_attribute("id") == "items"
+    # has_not removes it
+    assert page.locator("ul").filter(has_not=page.get_by_text("beta", exact=True)).count() == 0
+    # has_not_text: li elements NOT containing "beta"
+    others = page.locator("#items li").filter(has_not_text="beta")
+    assert others.all_text_contents() == ["alpha", "gamma"]
+
+
+@pytest.mark.browser
+def test_or_and_and_composition(page):
+    either = page.locator("#does-not-exist").or_(page.locator("#user"))
+    assert either.count() == 1
+    assert either.get_attribute("id") == "user"
+    # or_ unions and keeps document order
+    both = page.locator("#search").or_(page.locator("#user"))
+    assert both.count() == 2
+    assert both.first().get_attribute("id") == "user"
+    # and_ intersects
+    assert page.locator("input").and_(page.locator(".big")).get_attribute("id") == "user"
+    assert page.locator("button").and_(page.locator(".big")).count() == 0

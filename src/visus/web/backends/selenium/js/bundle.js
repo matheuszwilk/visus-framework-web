@@ -243,9 +243,19 @@
     return acc;
   }
 
-  function queryAll(stepsJson) {
-    var steps = (typeof stepsJson === "string") ? JSON.parse(stepsJson) : stepsJson;
-    var current = null; // null => root is document
+  // Sort elements into document order (or_/and_ results may interleave sets).
+  function docOrder(els) {
+    return els.slice().sort(function (a, b) {
+      if (a === b) return 0;
+      var pos = a.compareDocumentPosition(b);
+      return (pos & Node.DOCUMENT_POSITION_FOLLOWING) ? -1 : 1;
+    });
+  }
+
+  // Run a step pipeline from the given roots (null => document). Recursive so
+  // composed steps (filter_has / or / and) can evaluate their embedded pipelines.
+  function runSteps(initialRoots, steps) {
+    var current = initialRoots; // null => root is document
     for (var i = 0; i < steps.length; i++) {
       var step = steps[i];
       var roots = (current === null) ? [document] : current;
@@ -293,6 +303,22 @@
         for (r = 0; r < roots.length; r++) {
           if (roots[r] !== document && matchText(roots[r], step)) out.push(roots[r]);
         }
+      } else if (step.kind === "filter_has_not_text") {
+        for (r = 0; r < roots.length; r++) {
+          if (roots[r] !== document && !matchText(roots[r], step)) out.push(roots[r]);
+        }
+      } else if (step.kind === "filter_has" || step.kind === "filter_has_not") {
+        for (r = 0; r < roots.length; r++) {
+          if (roots[r] === document) continue;
+          var contained = runSteps([roots[r]], step.steps).length > 0;
+          if (contained === (step.kind === "filter_has")) out.push(roots[r]);
+        }
+      } else if (step.kind === "or") {
+        var ours = roots.filter(function (x) { return x !== document; });
+        out = docOrder(dedupe(ours.concat(runSteps(null, step.steps))));
+      } else if (step.kind === "and") {
+        var theirs = runSteps(null, step.steps);
+        out = roots.filter(function (x) { return x !== document && theirs.indexOf(x) >= 0; });
       } else if (step.kind === "label") {
         for (r = 0; r < roots.length; r++) {
           base = roots[r]; all = base.querySelectorAll("*");
@@ -359,6 +385,11 @@
       current = dedupe(out);
     }
     return current === null ? [] : current;
+  }
+
+  function queryAll(stepsJson) {
+    var steps = (typeof stepsJson === "string") ? JSON.parse(stepsJson) : stepsJson;
+    return runSteps(null, steps);
   }
 
   function clickablePoint(el) {

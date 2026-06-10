@@ -1,6 +1,8 @@
 import json
 import re
 
+import pytest
+
 from visus.web.api.locator import Locator
 from visus.web.config import Defaults
 
@@ -126,6 +128,58 @@ def test_filter_has_text_regex():
     d = _RecordingDelegate()
     loc = Locator(d, (), _DEFAULTS).locator("ul").filter(has_text=re.compile("item"))
     assert _steps(loc)[-1] == {"kind": "filter_has_text", "regex": "item", "flags": ""}
+
+
+def test_or_and_and_embed_steps():
+    d = _RecordingDelegate()
+    a = Locator(d, (), _DEFAULTS).locator("#a")
+    b = Locator(d, (), _DEFAULTS).locator("#b")
+    assert _steps(a.or_(b)) == [
+        {"kind": "css", "value": "#a"},
+        {"kind": "or", "steps": [{"kind": "css", "value": "#b"}]},
+    ]
+    assert _steps(a.and_(b))[-1] == {"kind": "and", "steps": [{"kind": "css", "value": "#b"}]}
+
+
+def test_filter_has_and_has_not_embed_steps():
+    d = _RecordingDelegate()
+    root = Locator(d, (), _DEFAULTS).locator("form")
+    inner = Locator(d, (), _DEFAULTS).locator("input")
+    assert _steps(root.filter(has=inner))[-1] == {
+        "kind": "filter_has",
+        "steps": [{"kind": "css", "value": "input"}],
+    }
+    assert _steps(root.filter(has_not=inner))[-1] == {
+        "kind": "filter_has_not",
+        "steps": [{"kind": "css", "value": "input"}],
+    }
+    assert _steps(root.filter(has_not_text="x"))[-1] == {
+        "kind": "filter_has_not_text",
+        "value": "x",
+        "exact": False,
+    }
+
+
+def test_filter_combines_multiple_conditions():
+    d = _RecordingDelegate()
+    inner = Locator(d, (), _DEFAULTS).locator("input")
+    loc = Locator(d, (), _DEFAULTS).locator("form").filter(has_text="a", has=inner)
+    kinds = [s["kind"] for s in _steps(loc)]
+    assert kinds == ["css", "filter_has_text", "filter_has"]
+
+
+def test_compose_rejects_frame_locators():
+    d = _RecordingDelegate()
+    a = Locator(d, (), _DEFAULTS).locator("#a")
+    framed = Locator(
+        d, ({"kind": "frame", "frame": [{"kind": "css", "value": "iframe"}]},), _DEFAULTS
+    ).locator("#x")
+    with pytest.raises(ValueError):
+        a.or_(framed)
+    with pytest.raises(ValueError):
+        a.and_(framed)
+    with pytest.raises(ValueError):
+        a.filter(has=framed)
 
 
 def test_expect_passes_matcher_and_negation_to_delegate():
