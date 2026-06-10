@@ -22,6 +22,9 @@ def build_options(*, headless: bool, download_dir: str, user_data_dir: str) -> O
             "download.prompt_for_download": False,
         },
     )
+    # Performance log feeds page.network_requests(); browser log feeds
+    # page.console_messages(). Negligible overhead when never drained.
+    opts.set_capability("goog:loggingPrefs", {"performance": "ALL", "browser": "ALL"})
     return opts
 
 

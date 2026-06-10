@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any, cast
 from visus.web import errors
 
 from visus.web.api._steps import run_step
-from visus.web.api.events import Dialog, Download, _ValueHolder
+from visus.web.api.events import ConsoleMessage, Dialog, Download, NetworkResponse, _ValueHolder
 from visus.web.api.locator import Locator, TextArg
 from visus.web.backends.base import PageDelegate
 from visus.web.config import Defaults
@@ -364,6 +364,101 @@ class Page:
     def set_offline(self, offline: bool) -> None:
         """Toggle offline mode (Chromium only, via CDP). Restores with ``set_offline(False)``."""
         self._delegate.set_offline(offline)
+
+    # --- network/console capture (Chromium) ---
+
+    def network_requests(self) -> list[NetworkResponse]:
+        """Every network response captured so far (document, XHR/fetch, assets).
+
+        Chromium only. Use it to debug, or to assert that the API call behind a
+        UI action actually happened: ``[r for r in page.network_requests() if "/api/" in r.url]``.
+        """
+        return [NetworkResponse(self._delegate, r) for r in self._delegate.network_requests()]
+
+    def console_messages(self) -> list[ConsoleMessage]:
+        """Every console message captured so far (``console.*``, uncaught errors).
+
+        Chromium only.
+        """
+        return [
+            ConsoleMessage(level=cast(str, m.get("level", "")), text=cast(str, m.get("text", "")))
+            for m in self._delegate.console_messages()
+        ]
+
+    def wait_for_response(
+        self, url_pattern: str, *, timeout: int | None = None
+    ) -> NetworkResponse:
+        """Wait for the next response whose URL matches *url_pattern* (glob like
+        ``"*api/orders*"`` or plain substring). Chromium only."""
+        rec = self._delegate.wait_for_response(
+            url_pattern,
+            timeout_ms=timeout if timeout is not None else self._defaults.action_timeout_ms,
+        )
+        return NetworkResponse(self._delegate, rec)
+
+    @contextmanager
+    def expect_response(
+        self, url_pattern: str, *, timeout: int | None = None
+    ) -> Generator[_ValueHolder, None, None]:
+        """Context manager: run an action and capture the response it triggers::
+
+            with page.expect_response("*api/login*") as info:
+                page.get_by_role("button", name="Sign in").click()
+            assert info.value.ok
+        """
+        marker = self._delegate.network_marker()
+        holder: _ValueHolder = _ValueHolder()
+        yield holder
+        rec = self._delegate.wait_for_response(
+            url_pattern,
+            timeout_ms=timeout if timeout is not None else self._defaults.action_timeout_ms,
+            from_index=marker,
+        )
+        holder._set(NetworkResponse(self._delegate, rec))
+
+    # --- init scripts + emulation ---
+
+    def add_init_script(self, script: str) -> None:
+        """Inject *script* before every document loaded from now on (Chromium only).
+
+        Ideal for seeding mocks or flags before the app boots — call it before
+        :meth:`goto`.
+        """
+        self._delegate.add_init_script(script)
+
+    def set_geolocation(
+        self, latitude: float, longitude: float, *, accuracy: float = 100
+    ) -> None:
+        """Override the device geolocation (Chromium only).
+
+        Grant the permission first: ``page.grant_permissions(["geolocation"])``.
+        """
+        self._delegate.set_geolocation(latitude, longitude, accuracy=accuracy)
+
+    def grant_permissions(self, permissions: list[str], *, origin: str | None = None) -> None:
+        """Grant browser permissions, e.g. ``["geolocation", "notifications"]``
+        (Chromium only); optionally restricted to *origin*."""
+        self._delegate.grant_permissions(permissions, origin=origin)
+
+    def set_device_metrics(
+        self,
+        width: int,
+        height: int,
+        *,
+        device_scale_factor: float = 1.0,
+        mobile: bool = False,
+    ) -> None:
+        """Emulate a device viewport: size, pixel ratio and the mobile flag
+        (Chromium only). E.g. iPhone-ish: ``set_device_metrics(390, 844,
+        device_scale_factor=3.0, mobile=True)``."""
+        self._delegate.set_device_metrics(
+            width, height, device_scale_factor=device_scale_factor, mobile=mobile
+        )
+
+    def set_viewport_size(self, width: int, height: int) -> None:
+        """Resize the window so the page viewport is exactly width×height
+        (works on every browser)."""
+        self._delegate.set_viewport_size(width, height)
 
     @contextmanager
     def expect_download(self, *, timeout: int | None = None) -> Generator[_ValueHolder, None, None]:

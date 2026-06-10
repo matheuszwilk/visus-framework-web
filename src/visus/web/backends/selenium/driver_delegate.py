@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import base64
+import fnmatch
+import json
 import os
+import re
 import time
 from typing import TYPE_CHECKING, cast
 
@@ -89,6 +92,18 @@ class SeleniumPageDelegate:
         self._context = context
         self._mouse_x: int = 0
         self._mouse_y: int = 0
+        # CDP log capture (Chromium): filled lazily by _drain_logs()
+        self._net_buffer: list[dict[str, object]] = []
+        self._console_buffer: list[dict[str, object]] = []
+        # Enable the Network domain on THIS tab's CDP session right away so
+        # response bodies are retained from the first navigation on —
+        # wait_for_response(...).body() needs the domain active when the
+        # response arrives. Per-tab: execute_cdp_cmd targets the active window.
+        try:
+            self._driver.switch_to.window(handle)
+            self._driver.execute_cdp_cmd("Network.enable", {})
+        except Exception:
+            pass  # non-Chromium / remote without CDP — capture simply stays empty
 
     def _activate(self) -> None:
         if self._closed:
@@ -938,6 +953,187 @@ class SeleniumPageDelegate:
                 "uploadThroughput": -1,
             },
         )
+
+    # ------------------------------------------------------------------
+    # Network / console capture (Chromium performance + browser logs)
+    # ------------------------------------------------------------------
+
+    def _drain_logs(self) -> None:
+        """Pull pending performance/browser log entries into the buffers.
+
+        get_log() returns only entries newer than the previous call, so the
+        buffers accumulate the full session history. Non-Chromium drivers (no
+        loggingPrefs) simply contribute nothing.
+        """
+        try:
+            perf = self._driver.get_log("performance")
+        except Exception:
+            perf = []
+        for entry in perf:
+            try:
+                msg = json.loads(cast(str, entry["message"]))["message"]
+            except Exception:
+                continue
+            method = msg.get("method")
+            if method == "Network.responseReceived":
+                p = msg["params"]
+                r = p.get("response") or {}
+                self._net_buffer.append(
+                    {
+                        "url": r.get("url", ""),
+                        "status": r.get("status", 0),
+                        "method": "",
+                        "resource_type": p.get("type", ""),
+                        "request_id": p.get("requestId", ""),
+                        "finished": False,
+                    }
+                )
+            elif method == "Network.requestWillBeSent":
+                p = msg["params"]
+                rid = p.get("requestId")
+                http_method = (p.get("request") or {}).get("method", "")
+                for rec in self._net_buffer:
+                    if rec["request_id"] == rid:
+                        rec["method"] = http_method
+            elif method in ("Network.loadingFinished", "Network.loadingFailed"):
+                rid = msg["params"].get("requestId")
+                for rec in self._net_buffer:
+                    if rec["request_id"] == rid:
+                        rec["finished"] = True
+        try:
+            browser_log = self._driver.get_log("browser")
+        except Exception:
+            browser_log = []
+        for entry in browser_log:
+            self._console_buffer.append(
+                {"level": entry.get("level", ""), "text": entry.get("message", "")}
+            )
+
+    def network_requests(self) -> list[dict[str, object]]:
+        """All captured network responses so far (Chromium only)."""
+        self._activate()
+        self._drain_logs()
+        return list(self._net_buffer)
+
+    def console_messages(self) -> list[dict[str, object]]:
+        """All captured console messages so far (Chromium only)."""
+        self._activate()
+        self._drain_logs()
+        return list(self._console_buffer)
+
+    def network_marker(self) -> int:
+        """Drain pending entries and return the current buffer position — use as
+        ``from_index`` to wait only for responses that arrive after this point."""
+        self._activate()
+        self._drain_logs()
+        return len(self._net_buffer)
+
+    @staticmethod
+    def _url_matcher(url_pattern: str) -> "re.Pattern[str] | None":
+        if any(ch in url_pattern for ch in "*?["):
+            return re.compile(fnmatch.translate(url_pattern))
+        return None
+
+    def wait_for_response(
+        self, url_pattern: str, *, timeout_ms: int, from_index: int | None = None
+    ) -> dict[str, object]:
+        """Poll until a response whose URL matches *url_pattern* (glob or
+        substring) is captured at/after *from_index*; return its record."""
+        self._activate()
+        pat = self._url_matcher(url_pattern)
+        start = from_index if from_index is not None else len(self._net_buffer)
+        deadline = time.monotonic() + timeout_ms / 1000
+        while True:
+            self._drain_logs()
+            for rec in self._net_buffer[start:]:
+                url = cast(str, rec["url"])
+                # only a FINISHED response: its body is retrievable and final
+                if rec.get("finished") and (pat.match(url) if pat else url_pattern in url):
+                    return rec
+            if time.monotonic() >= deadline:
+                raise errors.VisusTimeoutError(
+                    f"no response matching {url_pattern!r} within {timeout_ms}ms"
+                )
+            time.sleep(0.1)
+
+    def response_body(self, request_id: str) -> str:
+        """Fetch a captured response's body via CDP (Chromium only).
+
+        Retries briefly: the body pipe can lag a moment behind loadingFinished.
+        """
+        deadline = time.monotonic() + 2.0
+        while True:
+            try:
+                res = cast(
+                    "dict[str, object]",
+                    self._cdp("Network.getResponseBody", {"requestId": request_id}),
+                )
+                break
+            except errors.VisusWebError as exc:
+                if "No data found" in str(exc) and time.monotonic() < deadline:
+                    time.sleep(0.1)
+                    continue
+                raise
+        data = cast(str, res.get("body", ""))
+        if res.get("base64Encoded"):
+            return base64.b64decode(data).decode("utf-8", "replace")
+        return data
+
+    # ------------------------------------------------------------------
+    # Init scripts + emulation (Chromium CDP, except set_viewport_size)
+    # ------------------------------------------------------------------
+
+    def add_init_script(self, script: str) -> None:
+        """Inject *script* before every document created from now on (Chromium only)."""
+        self._cdp("Page.enable", {})
+        self._cdp("Page.addScriptToEvaluateOnNewDocument", {"source": script})
+
+    def set_geolocation(
+        self, latitude: float, longitude: float, *, accuracy: float = 100
+    ) -> None:
+        """Override the device geolocation (Chromium only). Grant the permission first."""
+        self._cdp(
+            "Emulation.setGeolocationOverride",
+            {"latitude": latitude, "longitude": longitude, "accuracy": accuracy},
+        )
+
+    def grant_permissions(self, permissions: list[str], *, origin: str | None = None) -> None:
+        """Grant browser permissions (e.g. ``["geolocation"]``), optionally per-origin (Chromium only)."""
+        params: dict[str, object] = {"permissions": permissions}
+        if origin is not None:
+            params["origin"] = origin
+        self._cdp("Browser.grantPermissions", params)
+
+    def set_device_metrics(
+        self,
+        width: int,
+        height: int,
+        *,
+        device_scale_factor: float = 1.0,
+        mobile: bool = False,
+    ) -> None:
+        """Emulate device metrics — viewport size, DPR, mobile flag (Chromium only)."""
+        self._cdp(
+            "Emulation.setDeviceMetricsOverride",
+            {
+                "width": width,
+                "height": height,
+                "deviceScaleFactor": device_scale_factor,
+                "mobile": mobile,
+            },
+        )
+
+    def set_viewport_size(self, width: int, height: int) -> None:
+        """Resize the window so the VIEWPORT is width×height (all browsers)."""
+        self._activate()
+        self._driver.set_window_size(width, height)
+        inner = cast(
+            "list[int]",
+            self._driver.execute_script("return [window.innerWidth, window.innerHeight];"),
+        )
+        dw, dh = width - inner[0], height - inner[1]
+        if dw or dh:
+            self._driver.set_window_size(width + dw, height + dh)
 
 
 class SeleniumContextDelegate:

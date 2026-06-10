@@ -121,6 +121,28 @@ class _FakePage:
     def block_urls(self, patterns): ...
     def set_extra_http_headers(self, headers): ...
     def set_offline(self, offline): ...
+
+    def network_requests(self):
+        return []
+
+    def console_messages(self):
+        return []
+
+    def network_marker(self):
+        return 0
+
+    def wait_for_response(self, url_pattern, *, timeout_ms, from_index=None):
+        return {}
+
+    def response_body(self, request_id):
+        return ""
+
+    def add_init_script(self, script): ...
+    def set_geolocation(self, latitude, longitude, *, accuracy=100): ...
+    def grant_permissions(self, permissions, *, origin=None): ...
+    def set_device_metrics(self, width, height, *, device_scale_factor=1.0, mobile=False): ...
+    def set_viewport_size(self, width, height): ...
+
     def capture_annotated_screenshot(self, selector):
         return b""
 
@@ -144,6 +166,7 @@ class _FakeContext:
         return []
 
     def close(self): ...
+
     def cookies(self):
         return []
 
