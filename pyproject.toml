@@ -45,6 +45,9 @@ cli = [
 visus = "visus.web.cli.main:app"
 visus-web-mcp = "visus.web.mcp.server:main"
 
+[project.entry-points.pytest11]
+visus_web = "visus.web.pytest_plugin"
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/visus"]
 
