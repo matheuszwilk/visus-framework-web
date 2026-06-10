@@ -220,3 +220,49 @@ def test_rpa_print_summary_ok_without_report(capsys, tmp_path):
     out = capsys.readouterr().out
     assert "[OK]" in out
     assert "report" not in out
+
+
+def test_rpa_forwards_launch_options(monkeypatch, tmp_path):
+    from unittest.mock import MagicMock
+
+    import visus.web
+
+    captured = {}
+
+    class _B:
+        def new_page(self):
+            return MagicMock()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return None
+
+    def fake_launch(engine, *, headless=False, slow_mo=0, user_data_dir=None, remote_url=None):
+        captured.update(
+            engine=engine,
+            headless=headless,
+            slow_mo=slow_mo,
+            user_data_dir=user_data_dir,
+            remote_url=remote_url,
+        )
+        return _B()
+
+    monkeypatch.setattr(visus.web, "launch", fake_launch)
+    from visus.web import rpa
+
+    with rpa(
+        "fwd",
+        headless=True,
+        slow_mo=5,
+        user_data_dir="C:/perfil/erp",
+        remote_url="http://grid:4444/wd/hub",
+        outdir=str(tmp_path),
+        report=False,
+        summary=False,
+    ):
+        pass
+    assert captured["user_data_dir"] == "C:/perfil/erp"
+    assert captured["remote_url"] == "http://grid:4444/wd/hub"
+    assert captured["slow_mo"] == 5 and captured["headless"] is True

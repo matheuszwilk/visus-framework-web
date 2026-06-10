@@ -129,6 +129,8 @@ async def rpa(
     engine: Engine | str = Engine.CHROME,
     headless: bool = False,
     slow_mo: int = 0,
+    user_data_dir: str | None = None,
+    remote_url: str | None = None,
     outdir: str | None = None,
     report: bool = True,
     summary: bool = True,
@@ -167,7 +169,13 @@ async def rpa(
     try:
         with tracing.record(str(zip_path), report=str(report_path) if report else None) as rec:
             box["rec"] = rec
-            browser = await launch(engine, headless=headless, slow_mo=slow_mo)
+            browser = await launch(
+                engine,
+                headless=headless,
+                slow_mo=slow_mo,
+                user_data_dir=user_data_dir,
+                remote_url=remote_url,
+            )
             try:
                 yield await browser.new_page()
             finally:

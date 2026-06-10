@@ -1380,3 +1380,40 @@ async def test_async_expect_dispatches_page_and_soft() -> None:
     al = AsyncLocator(_make_loc())
     assert isinstance(aexpect.soft(al), AsyncLocatorAssertions)
     aexpect.verify_soft()  # nothing collected — must not raise
+
+
+async def test_async_rpa_forwards_launch_options(monkeypatch, tmp_path) -> None:
+    import visus.web.async_api as amod
+
+    captured = {}
+
+    class _B:
+        def new_page(self):
+            return MagicMock()
+
+        def close(self):
+            pass
+
+    def fake_sync_launch(
+        engine, *, headless=False, slow_mo=0, user_data_dir=None, remote_url=None
+    ):
+        captured.update(user_data_dir=user_data_dir, remote_url=remote_url, slow_mo=slow_mo)
+        return _B()
+
+    monkeypatch.setattr(amod, "_sync_launch", fake_sync_launch)
+    async with rpa(
+        "fwd",
+        headless=True,
+        slow_mo=7,
+        user_data_dir="C:/perfil/erp",
+        remote_url="http://grid:4444",
+        outdir=str(tmp_path),
+        report=False,
+        summary=False,
+    ):
+        pass
+    assert captured == {
+        "user_data_dir": "C:/perfil/erp",
+        "remote_url": "http://grid:4444",
+        "slow_mo": 7,
+    }
