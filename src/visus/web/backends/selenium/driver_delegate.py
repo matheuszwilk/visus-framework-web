@@ -1057,3 +1057,66 @@ class SeleniumContextDelegate:
 
     def clear_cookies(self) -> None:
         self._driver.delete_all_cookies()
+
+    _DUMP_STORAGE_JS = (
+        "var ls=[],ss=[],i,k;"
+        "try{for(i=0;i<localStorage.length;i++){k=localStorage.key(i);"
+        "ls.push({name:k,value:localStorage.getItem(k)});}}catch(e){}"
+        "try{for(i=0;i<sessionStorage.length;i++){k=sessionStorage.key(i);"
+        "ss.push({name:k,value:sessionStorage.getItem(k)});}}catch(e){}"
+        "return {origin: location.origin, localStorage: ls, sessionStorage: ss};"
+    )
+
+    def storage_state(self) -> dict:  # type: ignore[type-arg]
+        """Cookies + web storage (local/session) for every open page's origin.
+
+        Selenium can only read the storage of a currently-loaded document, so
+        the snapshot covers the origins of the context's open pages (deduped).
+        """
+        origins: list[dict] = []  # type: ignore[type-arg]
+        seen: set[str] = set()
+        for p in self.pages():
+            try:
+                cast(SeleniumPageDelegate, p)._activate()
+                data = cast(dict, self._driver.execute_script(self._DUMP_STORAGE_JS))  # type: ignore[type-arg]
+            except Exception:
+                continue
+            if data and data.get("origin") not in seen and data.get("origin") != "null":
+                seen.add(cast(str, data["origin"]))
+                origins.append(data)
+        return {"cookies": self._driver.get_cookies(), "origins": origins}
+
+    _APPLY_STORAGE_JS = (
+        "var a=arguments[0],b=arguments[1],i;"
+        "try{for(i=0;i<a.length;i++)localStorage.setItem(a[i].name,a[i].value);}catch(e){}"
+        "try{for(i=0;i<b.length;i++)sessionStorage.setItem(b[i].name,b[i].value);}catch(e){}"
+    )
+
+    def restore_storage_state(self, state: dict) -> None:  # type: ignore[type-arg]
+        """Apply a :meth:`storage_state` snapshot to this context.
+
+        Cookies are applied best-effort (Selenium only accepts a cookie for the
+        currently-loaded domain); web storage is applied to every open page
+        whose origin appears in the snapshot. Navigate to the target origin
+        first, then restore, then reload if the app reads storage at startup.
+        """
+        for c in state.get("cookies", []):
+            try:
+                self._driver.add_cookie(dict(c))
+            except Exception:
+                continue
+        by_origin = {o.get("origin"): o for o in state.get("origins", [])}
+        for p in self.pages():
+            try:
+                cast(SeleniumPageDelegate, p)._activate()
+                origin = self._driver.execute_script("return location.origin;")
+                o = by_origin.get(origin)
+                if not o:
+                    continue
+                self._driver.execute_script(
+                    self._APPLY_STORAGE_JS,
+                    o.get("localStorage", []),
+                    o.get("sessionStorage", []),
+                )
+            except Exception:
+                continue

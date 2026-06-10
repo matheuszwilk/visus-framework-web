@@ -112,6 +112,8 @@ class ContextDelegate(Protocol):
     def cookies(self) -> list[dict]: ...  # type: ignore[type-arg]
     def add_cookies(self, cookies: list[dict]) -> None: ...  # type: ignore[type-arg]
     def clear_cookies(self) -> None: ...
+    def storage_state(self) -> dict: ...  # type: ignore[type-arg]
+    def restore_storage_state(self, state: dict) -> None: ...  # type: ignore[type-arg]
 
 
 @runtime_checkable
@@ -131,4 +133,11 @@ class BrowserConfig:
 
 @runtime_checkable
 class Backend(Protocol):
-    def launch(self, config: BrowserConfig, *, headless: bool) -> BrowserDelegate: ...
+    def launch(
+        self,
+        config: BrowserConfig,
+        *,
+        headless: bool,
+        user_data_dir: str | None = None,
+        remote_url: str | None = None,
+    ) -> BrowserDelegate: ...

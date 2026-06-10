@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 from dataclasses import replace
+from pathlib import Path
 
 from visus.web.api.page import Page
 from visus.web.backends.base import ContextDelegate
@@ -41,6 +43,27 @@ class Context:
 
     def close(self) -> None:
         self._delegate.close()
+
+    def storage_state(self, *, path: str | None = None) -> dict:  # type: ignore[type-arg]
+        """Snapshot cookies + web storage (for the open pages' origins).
+
+        Pass ``path`` to also write the snapshot as JSON — reuse it in a later
+        run with :meth:`restore_storage_state` to skip a login.
+        """
+        state = self._delegate.storage_state()
+        if path is not None:
+            Path(path).write_text(json.dumps(state, indent=2), encoding="utf-8")
+        return state
+
+    def restore_storage_state(self, state: dict | str) -> None:  # type: ignore[type-arg]
+        """Apply a snapshot from :meth:`storage_state` (a dict or a JSON file path).
+
+        Navigate a page to the target origin first; cookies only apply to the
+        currently-loaded domain and web storage is per-origin.
+        """
+        if isinstance(state, str):
+            state = json.loads(Path(state).read_text(encoding="utf-8"))
+        self._delegate.restore_storage_state(state)
 
     def cookies(self) -> list[dict]:  # type: ignore[type-arg]
         return self._delegate.cookies()

@@ -150,6 +150,11 @@ class _FakeContext:
     def add_cookies(self, cookies): ...
     def clear_cookies(self): ...
 
+    def storage_state(self):
+        return {"cookies": [], "origins": []}
+
+    def restore_storage_state(self, state): ...
+
 
 class _FakeBrowser:
     def new_context(self):
