@@ -1,5 +1,6 @@
 # ---- Reference clones (study material, NOT part of this project) ----
 /playwright/
+/playwright-python/
 /botcity-framework-web-python/
 
 # ---- Local-only planning docs (specs/plans kept on disk, NOT tracked) ----
