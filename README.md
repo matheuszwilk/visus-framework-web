@@ -39,6 +39,7 @@ scratch, fully typed, with **no Playwright dependency**. On top of the test-auto
   - [Locators](#locators)
   - [Paste-an-element locator](#paste-an-element-locator)
   - [Actions](#actions)
+  - [Web-first waits](#web-first-waits)
   - [Assertions (`expect`)](#assertions-expect)
   - [Field enumeration (act by number)](#field-enumeration-act-by-number)
   - [Frames & iframes](#frames--iframes)
@@ -46,12 +47,16 @@ scratch, fully typed, with **no Playwright dependency**. On top of the test-auto
   - [Dialogs](#dialogs)
   - [Downloads](#downloads)
   - [Cookies & contexts](#cookies--contexts)
+  - [Storage state — persist logins across runs](#storage-state--persist-logins-across-runs)
   - [Screenshots, PDF & JavaScript](#screenshots-pdf--javascript)
   - [Network controls](#network-controls)
+  - [Network & console capture](#network--console-capture)
+  - [Emulation & init scripts](#emulation--init-scripts)
   - [Low-level mouse & keyboard](#low-level-mouse--keyboard)
   - [Vision — OCR & image matching](#vision--ocr--image-matching)
   - [Tracing & HTML reports](#tracing--html-reports)
   - [Async API](#async-api)
+  - [pytest plugin](#pytest-plugin)
 - [Engines](#engines)
 - [Configuration & environment variables](#configuration--environment-variables)
 - [Error handling](#error-handling)
@@ -65,7 +70,13 @@ scratch, fully typed, with **no Playwright dependency**. On top of the test-auto
 
 - **🎭 Semantic locators** — `get_by_role / text / label / placeholder / test_id / alt_text / title`,
   `locator(css|xpath)`, `first / last / nth / filter`, plus `frame_locator` for cross-origin and
-  nested iframes. Find elements the way a user perceives them, not by brittle CSS chains.
+  nested iframes. Find elements the way a user perceives them, not by brittle CSS chains. Every
+  text matcher also accepts a compiled **`re.Pattern`** (`get_by_text(re.compile(r"Sub\w+", re.I))`).
+- **🧮 Locator composition** — `filter(has=, has_not=, has_text=, has_not_text=)` and the
+  `or_()` / `and_()` operators disambiguate without dropping to XPath.
+- **⏱️ Web-first waits** — `locator.wait_for(state=...)`, `page.wait_for_url` (glob/regex/predicate),
+  `page.wait_for_load_state`, `page.wait_for_function` — synchronize on SPA redirects and async
+  renders without hand-rolled polling.
 - **📋 Paste-an-element locator** — paste an element straight from DevTools ("Copy element") into
   `page.locator('<input name="email" class="…">')`; Visus derives an **ordered set of selectors**
   (id → `data-*` → name → aria → class → xpath, Tailwind classes escaped) and tries each until one
@@ -74,8 +85,21 @@ scratch, fully typed, with **no Playwright dependency**. On top of the test-auto
   set_checked / select_option / drag_to / focus / blur / clear / set_input_files` all wait for the
   element to become actionable. **No `sleep`, ever.**
 - **✅ Web-first assertions** — `expect(loc).to_be_visible / to_have_text / to_have_value /
-  to_have_count / to_have_role / …` with `.not_` negation; every matcher **auto-retries** until it
-  passes or times out.
+  to_have_count / to_have_role / to_be_focused / to_be_in_viewport / to_have_css / …` with `.not_`
+  negation; every matcher **auto-retries**. Page-level `expect(page).to_have_url / to_have_title`,
+  custom failure messages (`expect(loc, "context")`), and **soft assertions**
+  (`expect.soft(...)` + `expect.verify_soft()`).
+- **🌍 Network & console capture (Chromium)** — `page.network_requests()`,
+  `page.wait_for_response("*api*")` (with `.body()`), `page.expect_response(...)` around an
+  action, and `page.console_messages()` — assert on the API call behind a click, not just the UI.
+- **🪪 Storage state & profiles** — `context.storage_state(path=...)` /
+  `restore_storage_state(...)` persist logins across runs; `launch(user_data_dir=...)` reuses a
+  persistent browser profile; `launch(remote_url=...)` drives a **Selenium Grid**.
+- **📱 Emulation (Chromium)** — `set_device_metrics`, `set_geolocation` + `grant_permissions`,
+  `set_viewport_size` (all engines), and `add_init_script` to seed pages before they boot.
+- **🧪 pytest plugin** — `visus_browser` / `visus_context` / `visus_page` fixtures with
+  screenshot-on-failure (`--visus-output`), `--visus-engine` / `--visus-headed` options, and
+  automatic soft-assert verification.
 - **🤖 Batteries-included RPA** — `rpa()` launches the browser, **records the run**, writes a
   single-file **HTML report (even on failure)**, and prints a summary — you write only the
   automation.
@@ -396,6 +420,22 @@ with launch("firefox", headless=True) as browser:
     # ... multiple pages / contexts available via browser.new_context()
 ```
 
+Launch options for real-world setups:
+
+```python
+launch(slow_mo=300)                                   # watch each action land (debug/demo)
+launch(user_data_dir="~/profiles/erp")                # persistent profile: logins survive runs
+launch("chrome", remote_url="http://grid:4444/wd/hub")  # run on a Selenium Grid
+```
+
+Per-page/context default timeouts (per-call `timeout=` still wins):
+
+```python
+page.set_default_timeout(10_000)              # actions + navigations on this page
+page.set_default_navigation_timeout(60_000)   # navigations only
+ctx.set_default_timeout(10_000)               # pages created by this context afterwards
+```
+
 ### Locators
 
 ```python
@@ -411,17 +451,34 @@ page.locator("#username")                       # CSS
 page.locator("xpath=//button[@type='submit']")  # XPath
 page.locator(".row").locator("css=button")      # chain
 
+# Regex — every text matcher takes a compiled re.Pattern
+import re
+page.get_by_text(re.compile(r"order #\d+", re.I))
+page.get_by_role("button", name=re.compile("^(OK|Confirm)$"))
+
 # Refinement
 page.get_by_role("listitem").filter(has_text="In stock").first()
 page.get_by_role("row").nth(2)
 page.locator(".card").last()
 page.locator("#shadow-host").locator("button", deep=True)   # pierce open Shadow DOM
 
+# Composition — disambiguate without XPath
+page.locator("tr").filter(has=page.get_by_role("button", name="Edit"))   # rows WITH an Edit button
+page.locator("tr").filter(has_not_text="archived")
+page.locator("#save").or_(page.locator("#submit")).click()               # whichever exists
+page.locator("input").and_(page.locator(".touched"))                     # intersection
+
 # Reads
 loc = page.locator("#total")
 loc.count(); loc.is_visible(); loc.is_enabled(); loc.is_checked()
-loc.text_content(); loc.get_attribute("href"); loc.input_value()
-loc.all_text_contents(); [l.text_content() for l in loc.all()]
+loc.text_content(); loc.inner_text(); loc.inner_html(); loc.input_value()
+loc.get_attribute("href"); loc.bounding_box()             # {x, y, width, height} | None
+loc.all_text_contents(); loc.all_inner_texts()
+
+# Utilities
+loc.scroll_into_view_if_needed(); loc.highlight()         # debug box around the element
+loc.dispatch_event("change")                               # synthetic DOM event
+loc.press_sequentially("4242424242424242", delay=50)       # char-by-char typing
 ```
 
 ### Paste-an-element locator
@@ -456,6 +513,24 @@ loc.set_input_files("invoice.pdf")       # or ["a.png", "b.png"]
 src.drag_to(target)
 ```
 
+### Web-first waits
+
+Synchronize on navigations and async renders without polling:
+
+```python
+import re
+
+page.get_by_role("button", name="Sign in").click()
+page.wait_for_url("*dashboard*")                    # glob — also re.Pattern or a predicate
+page.wait_for_url(re.compile(r"/orders/\d+$"))
+page.wait_for_load_state()                          # "load" (default) or "domcontentloaded"
+
+page.locator("#toast").wait_for()                   # visible (default)
+page.locator("#spinner").wait_for(state="hidden")   # also: attached / detached
+
+ready = page.wait_for_function("() => window.app && window.app.ready")  # poll JS until truthy
+```
+
 ### Assertions (`expect`)
 
 Web-first matchers auto-retry until they pass or time out; negate with `.not_`:
@@ -468,10 +543,26 @@ expect(page.get_by_label("Email")).to_have_value("ada@example.com")
 expect(page.get_by_role("listitem")).to_have_count(3)
 expect(page.get_by_text("Error")).not_.to_be_visible()
 
+# Page-level assertions (glob string or re.Pattern)
+expect(page).to_have_url("*checkout*")
+expect(page).to_have_title(re.compile("Dashboard"))
+
+# Custom failure message — prefixed onto the AssertionError
+expect(page.locator("#cart"), "cart should appear after adding an item").to_be_visible()
+
+# Soft assertions — collect failures, fail once at the end
+expect.soft(page.locator("#price")).to_have_text("$10")
+expect.soft(page.locator("#qty")).to_have_value("2")
+expect.verify_soft()   # raises ONE combined error if anything failed
+# (the pytest plugin calls verify_soft() automatically at the end of each test)
+
 # Full set:
 # to_be_visible / to_be_hidden / to_be_enabled / to_be_disabled / to_be_checked / to_be_editable
-# to_have_text(exact=True) / to_contain_text / to_have_value / to_have_count
+# to_be_attached / to_be_focused / to_be_empty / to_be_in_viewport
+# to_have_text(exact=True) / to_contain_text / to_have_value / to_have_values / to_have_count
 # to_have_attribute(name, value) / to_have_class / to_contain_class / to_have_role
+# to_have_css(name, value) / to_have_id
+# text/value/attribute/css matchers all accept re.Pattern
 ```
 
 ### Field enumeration (act by number)
@@ -542,6 +633,25 @@ print(ctx.cookies())
 ctx.clear_cookies()
 ```
 
+### Storage state — persist logins across runs
+
+Snapshot cookies + `localStorage`/`sessionStorage` once, restore in later runs and skip the login:
+
+```python
+# Run 1 — log in once, save the state
+page.goto("https://app.example.com")
+page.get_by_label("User").fill("ada"); page.get_by_role("button", name="Sign in").click()
+page.context.storage_state(path="auth.json")
+
+# Run N — restore instead of logging in
+page.goto("https://app.example.com")        # be at the origin first (cookies are per-domain)
+page.context.restore_storage_state("auth.json")
+page.reload()                               # app boots already authenticated
+```
+
+For a fully persistent browser (extensions, saved passwords, real profile), use
+`launch(user_data_dir="…")` instead — the profile directory is reused and never deleted.
+
 ### Screenshots, PDF & JavaScript
 
 ```python
@@ -560,6 +670,38 @@ Chromium-only, via CDP:
 page.block_urls(["*.ads.com", "*ga.js"])
 page.set_extra_http_headers({"X-Debug": "1"})
 page.set_offline(True); page.set_offline(False)
+```
+
+### Network & console capture
+
+Chromium-only. Assert on the API call behind a UI action — usually more reliable than waiting for
+the UI itself — and read the browser console when something misbehaves:
+
+```python
+# Wait for the response a click triggers
+with page.expect_response("*api/login*") as info:
+    page.get_by_role("button", name="Sign in").click()
+assert info.value.ok                       # .url, .status, .method, .resource_type
+print(info.value.body())                   # response body via CDP
+
+page.wait_for_response("*api/orders*")     # or wait for the next matching response
+for r in page.network_requests():          # everything captured so far
+    print(r.status, r.url)
+
+for m in page.console_messages():          # console.* and uncaught errors
+    print(m.level, m.text)                 # SEVERE / WARNING / INFO
+```
+
+The MCP server exposes the same data to agents via `browser_network_requests` and
+`browser_console_messages`.
+
+### Emulation & init scripts
+
+```python
+page.set_viewport_size(1280, 720)          # exact viewport, all engines
+page.set_device_metrics(390, 844, device_scale_factor=3.0, mobile=True)   # Chromium
+page.grant_permissions(["geolocation"]); page.set_geolocation(-23.55, -46.63)
+page.add_init_script("window.__env = 'test'")   # runs before every document from now on
 ```
 
 ### Low-level mouse & keyboard
@@ -664,8 +806,29 @@ async def login():
 ```
 
 Exports: `launch`, `rpa`, `expect`, `Engine`, `errors`, `tracing`, `Field`, `Dialog`,
-`Download`, `AsyncBrowser`, `AsyncContext`, `AsyncPage`, `AsyncLocator`, `AsyncFrameLocator`,
-`AsyncLocatorAssertions`, `AsyncMouse`, `AsyncKeyboard`.
+`Download`, `ConsoleMessage`, `AsyncBrowser`, `AsyncContext`, `AsyncPage`, `AsyncLocator`,
+`AsyncFrameLocator`, `AsyncLocatorAssertions`, `AsyncPageAssertions`, `AsyncNetworkResponse`,
+`AsyncMouse`, `AsyncKeyboard`.
+
+### pytest plugin
+
+Installing `visus-web` registers a pytest plugin with ready-made fixtures — no conftest needed:
+
+```python
+def test_login(visus_page):                  # fresh page per test, isolated context
+    visus_page.goto("https://example.com/login")
+    visus_page.get_by_label("User").fill("ada")
+    visus_page.get_by_role("button", name="Sign in").click()
+    # on failure a screenshot lands in visus-results/<test-id>.png
+```
+
+```bash
+pytest --visus-engine=firefox --visus-headed --visus-output=artifacts
+```
+
+- `visus_browser` (session-scoped), `visus_context` and `visus_page` (per-test, isolated)
+- **Screenshot on failure** saved to `--visus-output` (default `visus-results/`)
+- **Soft assertions** (`expect.soft`) are verified automatically at the end of each test
 
 ---
 

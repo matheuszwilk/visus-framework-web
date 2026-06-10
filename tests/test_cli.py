@@ -11,8 +11,10 @@ runner = CliRunner()
 
 
 def test_version() -> None:
+    from visus.web import __version__
+
     r = runner.invoke(app, ["version"])
-    assert r.exit_code == 0 and "0.0.1" in r.output
+    assert r.exit_code == 0 and __version__ in r.output
 
 
 def test_help_lists_commands() -> None:

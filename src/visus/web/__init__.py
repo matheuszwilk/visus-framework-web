@@ -14,7 +14,7 @@ from visus.web.engine import Engine
 from visus.web.registry import get_browser_config
 from visus.web.rpa import rpa
 
-__version__ = "0.0.1"
+__version__ = "0.1.0"
 
 __all__ = [
     "launch",
