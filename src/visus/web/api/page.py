@@ -46,6 +46,7 @@ class Page:
                 timeout_ms=timeout if timeout is not None else self._defaults.navigation_timeout_ms,
             ),
             backtrack,
+            slow_mo_ms=self._defaults.slow_mo_ms,
             action_name="goto",
             target=url,
         )

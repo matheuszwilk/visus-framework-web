@@ -137,6 +137,7 @@ def run_step(
     action_name: str = "action",
     selector: str | None = None,
     target: str | None = None,
+    slow_mo_ms: int = 0,
 ) -> None:
     """Run ``action()`` with optional backtrack recovery.
 
@@ -150,6 +151,9 @@ def run_step(
     this step can be recorded too); they are ignored on the fast path.
     """
     from visus.web import tracing
+
+    if slow_mo_ms > 0:
+        time.sleep(slow_mo_ms / 1000)
 
     # Tag the action with its metadata so that, if a later step backtracks and
     # replays this one, the replay can be recorded with the right label/screenshot.

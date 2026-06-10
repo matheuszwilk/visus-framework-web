@@ -30,8 +30,16 @@ __all__ = [
 ]
 
 
-def launch(engine: Engine | str = Engine.CHROME, *, headless: bool = False) -> Browser:
+def launch(
+    engine: Engine | str = Engine.CHROME,
+    *,
+    headless: bool = False,
+    slow_mo: int = 0,
+) -> Browser:
     """Launch a browser and return a Browser handle.
+
+    *slow_mo* delays every action/navigation by the given milliseconds — handy
+    to watch a script drive the page in real time.
 
     Usage:
         with launch(headless=True) as browser:
@@ -42,4 +50,4 @@ def launch(engine: Engine | str = Engine.CHROME, *, headless: bool = False) -> B
     config = get_browser_config(resolved)
     backend = SeleniumBackend()
     delegate = backend.launch(config, headless=headless)
-    return Browser(delegate, Defaults())
+    return Browser(delegate, Defaults(slow_mo_ms=slow_mo))

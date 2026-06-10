@@ -214,6 +214,7 @@ class Locator:
                 self._encoded, timeout_ms=self._t(timeout), force=force
             ),
             backtrack,
+            slow_mo_ms=self._defaults.slow_mo_ms,
             action_name="click",
             selector=self._encoded,
         )
@@ -232,6 +233,7 @@ class Locator:
                 self._encoded, value, timeout_ms=self._t(timeout), force=force
             ),
             backtrack,
+            slow_mo_ms=self._defaults.slow_mo_ms,
             action_name="fill",
             selector=self._encoded,
         )
@@ -245,6 +247,7 @@ class Locator:
                 self._encoded, timeout_ms=self._t(timeout), force=force
             ),
             backtrack,
+            slow_mo_ms=self._defaults.slow_mo_ms,
             action_name="hover",
             selector=self._encoded,
         )
@@ -258,6 +261,7 @@ class Locator:
                 self._encoded, timeout_ms=self._t(timeout), force=force
             ),
             backtrack,
+            slow_mo_ms=self._defaults.slow_mo_ms,
             action_name="dblclick",
             selector=self._encoded,
         )
@@ -271,6 +275,7 @@ class Locator:
                 self._encoded, True, timeout_ms=self._t(timeout), force=force
             ),
             backtrack,
+            slow_mo_ms=self._defaults.slow_mo_ms,
             action_name="check",
             selector=self._encoded,
         )
@@ -284,6 +289,7 @@ class Locator:
                 self._encoded, False, timeout_ms=self._t(timeout), force=force
             ),
             backtrack,
+            slow_mo_ms=self._defaults.slow_mo_ms,
             action_name="uncheck",
             selector=self._encoded,
         )
@@ -302,6 +308,7 @@ class Locator:
                 self._encoded, checked, timeout_ms=self._t(timeout), force=force
             ),
             backtrack,
+            slow_mo_ms=self._defaults.slow_mo_ms,
             action_name="set_checked",
             selector=self._encoded,
         )
@@ -321,6 +328,7 @@ class Locator:
                 self._encoded, value=value, label=label, index=index, timeout_ms=self._t(timeout)
             ),
             backtrack,
+            slow_mo_ms=self._defaults.slow_mo_ms,
             action_name="select_option",
             selector=self._encoded,
         )
@@ -341,6 +349,7 @@ class Locator:
                 self._encoded, text, delay_ms=delay, timeout_ms=self._t(timeout)
             ),
             backtrack,
+            slow_mo_ms=self._defaults.slow_mo_ms,
             action_name="press_sequentially",
             selector=self._encoded,
         )
@@ -350,6 +359,7 @@ class Locator:
             self._delegate,
             lambda: self._delegate.locator_press(self._encoded, key, timeout_ms=self._t(timeout)),
             backtrack,
+            slow_mo_ms=self._defaults.slow_mo_ms,
             action_name="press",
             selector=self._encoded,
         )
@@ -359,6 +369,7 @@ class Locator:
             self._delegate,
             lambda: self._delegate.locator_focus(self._encoded, timeout_ms=self._t(timeout)),
             backtrack,
+            slow_mo_ms=self._defaults.slow_mo_ms,
             action_name="focus",
             selector=self._encoded,
         )
@@ -368,6 +379,7 @@ class Locator:
             self._delegate,
             lambda: self._delegate.locator_blur(self._encoded, timeout_ms=self._t(timeout)),
             backtrack,
+            slow_mo_ms=self._defaults.slow_mo_ms,
             action_name="blur",
             selector=self._encoded,
         )
@@ -381,6 +393,7 @@ class Locator:
                 self._encoded, timeout_ms=self._t(timeout), force=force
             ),
             backtrack,
+            slow_mo_ms=self._defaults.slow_mo_ms,
             action_name="clear",
             selector=self._encoded,
         )
@@ -394,6 +407,7 @@ class Locator:
                 self._encoded, target._encoded, timeout_ms=self._t(timeout)
             ),
             backtrack,
+            slow_mo_ms=self._defaults.slow_mo_ms,
             action_name="drag_to",
             selector=self._encoded,
         )
@@ -481,6 +495,7 @@ class Locator:
             self._delegate,
             lambda: self._delegate.locator_set_input_files(self._encoded, paths),
             backtrack,
+            slow_mo_ms=self._defaults.slow_mo_ms,
             action_name="set_input_files",
             selector=self._encoded,
         )
