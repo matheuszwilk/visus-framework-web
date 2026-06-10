@@ -111,8 +111,9 @@ scratch, fully typed, with **no Playwright dependency**. On top of the test-auto
 - **👁️ Vision plugin (`[vision]`)** — `read_text` / `solve_captcha` (RapidOCR) and `find_image` /
   `find_all_images` (OpenCV), plus `locator.ocr_text()` / `locator.find_image()` /
   `page.solve_captcha()`.
-- **🧩 MCP server (`[mcp]`)** — `visus-web-mcp` exposes **43 tools** (navigation, accessibility
-  snapshot, all actions, tabs, dialogs, cookies, screenshot, evaluate, vision) to AI agents.
+- **🧩 MCP server (`[mcp]`)** — `visus-web-mcp` exposes **45 tools** (navigation, accessibility
+  snapshot, all actions, tabs, dialogs, cookies, network/console capture, screenshot, evaluate,
+  vision) to AI agents.
 - **⌨️ Full-featured CLI (`[cli]`)** — the `visus` command mirrors the whole surface in the shell
   with a persistent browser daemon, `--json` everywhere, and an interactive `console`.
 - **🔌 Async API** — `visus.web.async_api` is a 100% mirror of the sync surface (same names, same
@@ -190,7 +191,7 @@ with launch(headless=True) as browser:
 
 ## Drive it from any MCP agent
 
-`visus-web` ships a **Model Context Protocol** server exposing **43 tools** so an AI agent
+`visus-web` ships a **Model Context Protocol** server exposing **45 tools** so an AI agent
 (Claude Code / Desktop, Cursor) can drive the browser end to end. Each tool carries a docstring that
 teaches the agent *when and how* to use it, so it never has to read source.
 
@@ -215,7 +216,7 @@ Wire it into your MCP client:
 }
 ```
 
-**Tool groups (43 tools):**
+**Tool groups (45 tools):**
 
 | Group | Tools |
 |---|---|
@@ -225,6 +226,7 @@ Wire it into your MCP client:
 | Wait / expect | `browser_wait_for`, `browser_expect_text` |
 | Tabs | `browser_tab_list`, `browser_tab_new`, `browser_tab_select`, `browser_tab_activate`, `browser_tab_close`, `browser_set_tab_follow` |
 | Dialogs | `browser_handle_dialog` |
+| Network / console *(Chromium)* | `browser_network_requests`, `browser_console_messages` |
 | Cookies | `browser_get_cookies`, `browser_add_cookies`, `browser_clear_cookies` |
 | Media / JS | `browser_screenshot`, `browser_evaluate` |
 | Vision *(`[vision]`)* | `browser_read_text`, `browser_solve_captcha`, `browser_find_image` |
@@ -924,7 +926,7 @@ visus-framework-web/
 │   ├── vision/                 # OCR + image matching ([vision] extra)
 │   ├── backends/               # Selenium engine (all selenium.* confined here) + browser drivers
 │   ├── cli/                    # the `visus` CLI + persistent session daemon
-│   ├── mcp/                    # the visus-web-mcp server (43 tools)
+│   ├── mcp/                    # the visus-web-mcp server (45 tools)
 │   └── observability/          # run recording + HTML report rendering
 ├── examples/                   # demo_rpa.py, login.py, login_rpa.py, login_mcp.py, dolar.py
 ├── skills/                     # using-visus-web, developing-visus-web (agent/contributor guides)
