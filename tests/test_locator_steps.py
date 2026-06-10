@@ -217,6 +217,34 @@ def test_expect_passes_matcher_and_negation_to_delegate():
     assert d.calls[2] == ("text", {"value": "Hi", "exact": True}, False, 5000)
 
 
+class _FailingExpect:
+    def expect_poll(self, s, matcher, arg, *, is_not, timeout_ms):
+        raise AssertionError("inner detail")
+
+
+def test_expect_message_prefixes_assertion_error():
+    from visus.web import expect
+
+    loc = Locator(_FailingExpect(), ({"kind": "css", "value": "#x"},), _DEFAULTS)
+    with pytest.raises(AssertionError) as ei:
+        expect(loc, "should show the cart").to_be_visible(timeout=1)
+    assert "should show the cart" in str(ei.value)
+    assert "inner detail" in str(ei.value)
+
+
+def test_expect_soft_collects_and_verify_raises_once():
+    from visus.web import expect
+
+    loc = Locator(_FailingExpect(), ({"kind": "css", "value": "#x"},), _DEFAULTS)
+    expect.soft(loc).to_be_visible(timeout=1)  # does NOT raise
+    expect.soft(loc, "second check").to_have_text("x", timeout=1)
+    with pytest.raises(AssertionError) as ei:
+        expect.verify_soft()
+    assert "2 soft assertion" in str(ei.value)
+    assert "second check" in str(ei.value)
+    expect.verify_soft()  # collector was reset — no failures left
+
+
 def test_expect_text_and_value_accept_regex():
     from visus.web import expect
     from visus.web.config import Defaults

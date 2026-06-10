@@ -118,6 +118,66 @@ def _evaluate(
         spec = cast("dict[str, object]", arg)
         actual = driver.execute_script("return window.__visus.role(arguments[0]);", els[0])
         return (actual == spec["value"], actual)
+    if matcher in ("focused", "empty", "in_viewport", "css", "id", "values"):
+        if not els:
+            return (False, "not present")
+        if len(els) > 1:
+            raise errors.StrictModeViolation("assertion locator matched multiple elements")
+        el = els[0]
+        if matcher == "focused":
+            focused = bool(
+                driver.execute_script("return document.activeElement === arguments[0];", el)
+            )
+            return (focused, "focused" if focused else "not focused")
+        if matcher == "empty":
+            empty = bool(
+                driver.execute_script(
+                    "var el=arguments[0];"
+                    "if(el.tagName==='INPUT'||el.tagName==='TEXTAREA') return el.value==='';"
+                    "return el.childElementCount===0 && !(el.textContent||'').trim();",
+                    el,
+                )
+            )
+            return (empty, "empty" if empty else "not empty")
+        if matcher == "in_viewport":
+            inside = bool(
+                driver.execute_script(
+                    "var r=arguments[0].getBoundingClientRect();"
+                    "var w=window.innerWidth||document.documentElement.clientWidth;"
+                    "var h=window.innerHeight||document.documentElement.clientHeight;"
+                    "return r.width>0&&r.height>0&&r.bottom>0&&r.right>0&&r.top<h&&r.left<w;",
+                    el,
+                )
+            )
+            return (inside, "in viewport" if inside else "outside viewport")
+        if matcher == "css":
+            spec = cast("dict[str, object]", arg)
+            actual = cast(
+                str,
+                driver.execute_script(
+                    "return getComputedStyle(arguments[0]).getPropertyValue(arguments[1]);",
+                    el,
+                    spec["name"],
+                ),
+            )
+            if "regex" in spec:
+                return (_text_matches(actual, spec), actual)
+            return (actual == spec["value"], actual)
+        if matcher == "id":
+            spec = cast("dict[str, object]", arg)
+            actual = cast(str, driver.execute_script("return arguments[0].id;", el))
+            return (actual == spec["value"], actual)
+        # values: the selected option values of a <select multiple>
+        spec = cast("dict[str, object]", arg)
+        got = cast(
+            "list[str]",
+            driver.execute_script(
+                "return Array.prototype.map.call("
+                "arguments[0].selectedOptions || [], function (o) { return o.value; });",
+                el,
+            ),
+        )
+        return (got == spec["values"], got)
     raise ValueError(f"unknown matcher: {matcher}")
 
 
