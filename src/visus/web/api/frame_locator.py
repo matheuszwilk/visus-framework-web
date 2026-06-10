@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from visus.web.api.locator import Locator
+from visus.web.api.locator import Locator, TextArg
 
 if TYPE_CHECKING:
     from visus.web.backends.base import PageDelegate
@@ -34,15 +34,17 @@ class FrameLocator:
     def locator(self, selector: str, *, deep: bool = False) -> Locator:
         return Locator(self._delegate, self._steps, self._defaults).locator(selector, deep=deep)
 
-    def get_by_role(self, role: str, *, name: str | None = None, exact: bool = False) -> Locator:
+    def get_by_role(
+        self, role: str, *, name: TextArg | None = None, exact: bool = False
+    ) -> Locator:
         return Locator(self._delegate, self._steps, self._defaults).get_by_role(
             role, name=name, exact=exact
         )
 
-    def get_by_text(self, text: str, *, exact: bool = False) -> Locator:
+    def get_by_text(self, text: TextArg, *, exact: bool = False) -> Locator:
         return Locator(self._delegate, self._steps, self._defaults).get_by_text(text, exact=exact)
 
-    def get_by_label(self, text: str, *, exact: bool = False) -> Locator:
+    def get_by_label(self, text: TextArg, *, exact: bool = False) -> Locator:
         return Locator(self._delegate, self._steps, self._defaults).get_by_label(text, exact=exact)
 
     def get_by_test_id(self, test_id: str) -> Locator:

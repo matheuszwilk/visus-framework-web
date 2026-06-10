@@ -1,4 +1,5 @@
 import json
+import re
 
 from visus.web.api.locator import Locator
 from visus.web.config import Defaults
@@ -101,6 +102,32 @@ def test_first_last_nth_steps():
     assert _steps(base.nth(2)) == [text_step, {"kind": "nth", "index": 2}]
 
 
+def test_get_by_text_regex_encodes_pattern():
+    d = _RecordingDelegate()
+    loc = Locator(d, (), _DEFAULTS).get_by_text(re.compile(r"Sub\w+", re.IGNORECASE))
+    assert _steps(loc) == [{"kind": "text", "regex": r"Sub\w+", "flags": "i"}]
+
+
+def test_get_by_label_regex_multiline_dotall_flags():
+    d = _RecordingDelegate()
+    loc = Locator(d, (), _DEFAULTS).get_by_label(re.compile("a.b", re.MULTILINE | re.DOTALL))
+    assert _steps(loc) == [{"kind": "label", "regex": "a.b", "flags": "ms"}]
+
+
+def test_get_by_role_name_regex():
+    d = _RecordingDelegate()
+    loc = Locator(d, (), _DEFAULTS).get_by_role("button", name=re.compile("ok"))
+    assert _steps(loc) == [
+        {"kind": "role", "role": "button", "nameRegex": "ok", "nameFlags": ""}
+    ]
+
+
+def test_filter_has_text_regex():
+    d = _RecordingDelegate()
+    loc = Locator(d, (), _DEFAULTS).locator("ul").filter(has_text=re.compile("item"))
+    assert _steps(loc)[-1] == {"kind": "filter_has_text", "regex": "item", "flags": ""}
+
+
 def test_expect_passes_matcher_and_negation_to_delegate():
     from visus.web import expect
     from visus.web.config import Defaults
@@ -134,3 +161,30 @@ def test_expect_passes_matcher_and_negation_to_delegate():
     assert d.calls[0] == ("visible", None, False, 5000)
     assert d.calls[1] == ("visible", None, True, 5000)
     assert d.calls[2] == ("text", {"value": "Hi", "exact": True}, False, 5000)
+
+
+def test_expect_text_and_value_accept_regex():
+    from visus.web import expect
+    from visus.web.config import Defaults
+
+    class RecExpect:
+        def __init__(self):
+            self.calls = []
+
+        def expect_poll(self, s, matcher, arg, *, is_not, timeout_ms):
+            self.calls.append((matcher, arg, is_not))
+
+    d = RecExpect()
+    loc = Locator(d, ({"kind": "css", "value": "#x"},), Defaults())
+    expect(loc).to_have_text(re.compile("Hi", re.IGNORECASE))
+    expect(loc).to_contain_text(re.compile("part"))
+    expect(loc).to_have_value(re.compile(r"\d+"))
+    expect(loc).to_have_attribute("href", re.compile("example"))
+    assert d.calls[0] == ("text", {"regex": "Hi", "flags": re.compile("Hi", re.IGNORECASE).flags}, False)
+    assert d.calls[1] == ("text", {"regex": "part", "flags": re.compile("part").flags}, False)
+    assert d.calls[2] == ("value", {"regex": r"\d+", "flags": re.compile(r"\d+").flags}, False)
+    assert d.calls[3] == (
+        "attribute",
+        {"name": "href", "regex": "example", "flags": re.compile("example").flags},
+        False,
+    )

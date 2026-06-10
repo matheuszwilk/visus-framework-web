@@ -78,3 +78,28 @@ def test_reads_state(page):
     assert page.locator("#ro").is_editable() is False
     assert page.locator("#user").is_editable() is True
     assert page.locator("#search").is_hidden() is False
+
+
+@pytest.mark.browser
+def test_regex_locators(page):
+    import re
+
+    # get_by_text / get_by_label / get_by_placeholder accept compiled patterns
+    assert page.get_by_label(re.compile(r"^User\w+$")).count() == 1
+    assert page.get_by_label(re.compile(r"^user\w+$", re.IGNORECASE)).count() == 1
+    assert page.get_by_placeholder(re.compile("search the", re.IGNORECASE)).count() == 1
+    # role + name regex
+    assert page.get_by_role("textbox", name=re.compile("User")).count() == 1
+    # a non-matching pattern matches nothing
+    assert page.get_by_label(re.compile(r"^Nothing\d+$")).count() == 0
+
+
+@pytest.mark.browser
+def test_regex_assertions(page):
+    import re
+
+    from visus.web import expect
+
+    expect(page.locator("#user")).to_have_value(re.compile(r"^ad."))
+    expect(page.locator("#user")).to_have_attribute("type", re.compile("te.t"))
+    expect(page.get_by_label("Username")).not_.to_have_value(re.compile(r"^\d+$"))

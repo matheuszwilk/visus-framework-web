@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from visus.web.api._steps import run_step
 from visus.web.api.events import Dialog, Download, _ValueHolder
-from visus.web.api.locator import Locator
+from visus.web.api.locator import Locator, TextArg
 from visus.web.backends.base import PageDelegate
 from visus.web.config import Defaults
 
@@ -113,22 +113,24 @@ class Page:
 
         return FrameLocator(self._delegate, (_frame_step(selector),), self._defaults)
 
-    def get_by_role(self, role: str, *, name: str | None = None, exact: bool = False) -> Locator:
+    def get_by_role(
+        self, role: str, *, name: TextArg | None = None, exact: bool = False
+    ) -> Locator:
         return Locator(self._delegate, (), self._defaults).get_by_role(role, name=name, exact=exact)
 
-    def get_by_text(self, text: str, *, exact: bool = False) -> Locator:
+    def get_by_text(self, text: TextArg, *, exact: bool = False) -> Locator:
         return Locator(self._delegate, (), self._defaults).get_by_text(text, exact=exact)
 
-    def get_by_label(self, text: str, *, exact: bool = False) -> Locator:
+    def get_by_label(self, text: TextArg, *, exact: bool = False) -> Locator:
         return Locator(self._delegate, (), self._defaults).get_by_label(text, exact=exact)
 
-    def get_by_placeholder(self, text: str, *, exact: bool = False) -> Locator:
+    def get_by_placeholder(self, text: TextArg, *, exact: bool = False) -> Locator:
         return Locator(self._delegate, (), self._defaults).get_by_placeholder(text, exact=exact)
 
-    def get_by_alt_text(self, text: str, *, exact: bool = False) -> Locator:
+    def get_by_alt_text(self, text: TextArg, *, exact: bool = False) -> Locator:
         return Locator(self._delegate, (), self._defaults).get_by_alt_text(text, exact=exact)
 
-    def get_by_title(self, text: str, *, exact: bool = False) -> Locator:
+    def get_by_title(self, text: TextArg, *, exact: bool = False) -> Locator:
         return Locator(self._delegate, (), self._defaults).get_by_title(text, exact=exact)
 
     def get_by_test_id(self, test_id: str) -> Locator:

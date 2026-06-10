@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING
+import re
+from typing import TYPE_CHECKING, Union
 
 from visus.web.api._steps import run_step
 
@@ -9,6 +10,29 @@ if TYPE_CHECKING:
     from visus.web.api.frame_locator import FrameLocator
     from visus.web.backends.base import PageDelegate
     from visus.web.config import Defaults
+
+TextArg = Union[str, "re.Pattern[str]"]
+"""A text matcher: plain string (substring, or exact with ``exact=True``) or a
+compiled :class:`re.Pattern` (matched with JS ``RegExp.test`` semantics)."""
+
+
+def _js_flags(flags: int) -> str:
+    """Translate Python re flags into the JS RegExp flags we support (i, m, s)."""
+    out = ""
+    if flags & re.IGNORECASE:
+        out += "i"
+    if flags & re.MULTILINE:
+        out += "m"
+    if flags & re.DOTALL:
+        out += "s"
+    return out
+
+
+def _text_step(kind: str, text: TextArg, exact: bool) -> dict[str, object]:
+    """Encode a text-ish matcher step: {value, exact} for str, {regex, flags} for re.Pattern."""
+    if isinstance(text, re.Pattern):
+        return {"kind": kind, "regex": text.pattern, "flags": _js_flags(text.flags)}
+    return {"kind": kind, "value": text, "exact": exact}
 
 
 class Locator:
@@ -28,23 +52,34 @@ class Locator:
         return Locator(self._delegate, self._steps + (step,), self._defaults)
 
     # --- builders (pure string/dict surgery; never touch the DOM) ---
-    def get_by_role(self, role: str, *, name: str | None = None, exact: bool = False) -> Locator:
+    def get_by_role(
+        self, role: str, *, name: TextArg | None = None, exact: bool = False
+    ) -> Locator:
+        if isinstance(name, re.Pattern):
+            return self._child(
+                {
+                    "kind": "role",
+                    "role": role,
+                    "nameRegex": name.pattern,
+                    "nameFlags": _js_flags(name.flags),
+                }
+            )
         return self._child({"kind": "role", "role": role, "name": name, "exact": exact})
 
-    def get_by_text(self, text: str, *, exact: bool = False) -> Locator:
-        return self._child({"kind": "text", "value": text, "exact": exact})
+    def get_by_text(self, text: TextArg, *, exact: bool = False) -> Locator:
+        return self._child(_text_step("text", text, exact))
 
-    def get_by_label(self, text: str, *, exact: bool = False) -> Locator:
-        return self._child({"kind": "label", "value": text, "exact": exact})
+    def get_by_label(self, text: TextArg, *, exact: bool = False) -> Locator:
+        return self._child(_text_step("label", text, exact))
 
-    def get_by_placeholder(self, text: str, *, exact: bool = False) -> Locator:
-        return self._child({"kind": "placeholder", "value": text, "exact": exact})
+    def get_by_placeholder(self, text: TextArg, *, exact: bool = False) -> Locator:
+        return self._child(_text_step("placeholder", text, exact))
 
-    def get_by_alt_text(self, text: str, *, exact: bool = False) -> Locator:
-        return self._child({"kind": "alt", "value": text, "exact": exact})
+    def get_by_alt_text(self, text: TextArg, *, exact: bool = False) -> Locator:
+        return self._child(_text_step("alt", text, exact))
 
-    def get_by_title(self, text: str, *, exact: bool = False) -> Locator:
-        return self._child({"kind": "title", "value": text, "exact": exact})
+    def get_by_title(self, text: TextArg, *, exact: bool = False) -> Locator:
+        return self._child(_text_step("title", text, exact))
 
     def get_by_test_id(self, test_id: str) -> Locator:
         return self._child({"kind": "testid", "value": test_id})
@@ -80,9 +115,9 @@ class Locator:
 
         return FrameLocator(self._delegate, self._steps + (_frame_step(selector),), self._defaults)
 
-    def filter(self, *, has_text: str | None = None) -> Locator:
+    def filter(self, *, has_text: TextArg | None = None) -> Locator:
         if has_text is not None:
-            return self._child({"kind": "filter_has_text", "value": has_text})
+            return self._child(_text_step("filter_has_text", has_text, False))
         return self
 
     def first(self) -> Locator:

@@ -19,6 +19,17 @@ def _norm_ws(s: str) -> str:
     return re.sub(r"\s+", " ", s.replace("\xa0", " ")).strip()
 
 
+def _text_matches(actual: str, spec: dict[str, object]) -> bool:
+    """Compare *actual* against a text matcher spec: {value, exact} or {regex, flags}."""
+    if "regex" in spec:
+        pattern = re.compile(cast(str, spec["regex"]), cast(int, spec.get("flags", 0)))
+        return pattern.search(actual) is not None
+    want = _norm_ws(cast(str, spec["value"]))
+    if spec.get("exact"):
+        return actual == want
+    return want.lower() in actual.lower()
+
+
 def _evaluate(
     driver: WebDriver,
     ensure_bundle: Callable[[], None],
@@ -61,10 +72,7 @@ def _evaluate(
             )
         )
         spec = cast(dict[str, object], arg)
-        want = _norm_ws(cast(str, spec["value"]))
-        if spec["exact"]:
-            return (actual == want, actual)
-        return (want.lower() in actual.lower(), actual)
+        return (_text_matches(actual, spec), actual)
     if matcher == "value":
         if not els:
             return (False, "not present")
@@ -72,6 +80,8 @@ def _evaluate(
             raise errors.StrictModeViolation("assertion locator matched multiple elements")
         actual = cast(str, driver.execute_script("return arguments[0].value;", els[0]) or "")
         spec = cast("dict[str, object]", arg)
+        if "regex" in spec:
+            return (_text_matches(actual, spec), actual)
         return (actual == spec["value"], actual)
     if matcher == "attribute":
         if not els:
@@ -82,6 +92,8 @@ def _evaluate(
         actual = driver.execute_script(
             "return arguments[0].getAttribute(arguments[1]);", els[0], spec["name"]
         )
+        if "regex" in spec:
+            return (actual is not None and _text_matches(cast(str, actual), spec), actual)
         return (actual == spec["value"], actual)
     if matcher == "class":
         if not els:

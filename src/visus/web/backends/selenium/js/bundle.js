@@ -159,21 +159,35 @@
     }
   }
 
-  function matchText(el, value, exact) {
-    var t = normText(el);
-    var v = normWs(value);
-    return exact ? t === v : t.toLowerCase().indexOf(v.toLowerCase()) >= 0;
+  // Compile a step's regex once per call; a malformed pattern matches nothing.
+  function stepRegex(pattern, flags) {
+    try { return new RegExp(pattern, flags || ""); } catch (e) { return null; }
   }
-  function matchName(el, name, exact) {
+  // Text matcher driven by a step: {regex, flags} (RegExp.test) or {value, exact}.
+  function textSatisfies(actual, step) {
+    if (step.regex != null) {
+      var re = stepRegex(step.regex, step.flags);
+      return re ? re.test(actual) : false;
+    }
+    var v = normWs(step.value);
+    return step.exact ? actual === v : actual.toLowerCase().indexOf(v.toLowerCase()) >= 0;
+  }
+  function matchText(el, step) {
+    return textSatisfies(normText(el), step);
+  }
+  function matchName(el, step) {
     var an = accessibleName(el);
-    var v = normWs(name);
-    return exact ? an === v : an.toLowerCase().indexOf(v.toLowerCase()) >= 0;
+    if (step.nameRegex != null) {
+      var re = stepRegex(step.nameRegex, step.nameFlags);
+      return re ? re.test(an) : false;
+    }
+    var v = normWs(step.name);
+    return step.exact ? an === v : an.toLowerCase().indexOf(v.toLowerCase()) >= 0;
   }
 
   function attrText(el, attr) { return normWs(el.getAttribute(attr) || ""); }
-  function matchAttr(el, attr, value, exact) {
-    var a = attrText(el, attr), v = normWs(value);
-    return exact ? a === v : a.toLowerCase().indexOf(v.toLowerCase()) >= 0;
+  function matchAttr(el, attr, step) {
+    return textSatisfies(attrText(el, attr), step);
   }
   function labelText(el) {
     var lb = el.getAttribute("aria-labelledby");
@@ -192,10 +206,9 @@
     if (el.closest) { var w = el.closest("label"); if (w) return normText(w); }
     return "";
   }
-  function matchLabel(el, value, exact) {
+  function matchLabel(el, step) {
     if (!isLabelable(el)) return false;
-    var l = labelText(el), v = normWs(value);
-    return exact ? l === v : l.toLowerCase().indexOf(v.toLowerCase()) >= 0;
+    return textSatisfies(labelText(el), step);
   }
 
   function dedupe(els) {
@@ -263,7 +276,7 @@
           all = base.querySelectorAll("*");
           for (j = 0; j < all.length; j++) {
             e = all[j];
-            if (computeRole(e) === step.role && (step.name == null || matchName(e, step.name, step.exact))) out.push(e);
+            if (computeRole(e) === step.role && ((step.name == null && step.nameRegex == null) || matchName(e, step))) out.push(e);
           }
         }
       } else if (step.kind === "text") {
@@ -272,33 +285,33 @@
           all = base.querySelectorAll("*");
           for (j = 0; j < all.length; j++) {
             e = all[j];
-            if (matchText(e, step.value, step.exact)) out.push(e);
+            if (matchText(e, step)) out.push(e);
           }
         }
         out = innermost(out);
       } else if (step.kind === "filter_has_text") {
         for (r = 0; r < roots.length; r++) {
-          if (roots[r] !== document && matchText(roots[r], step.value, false)) out.push(roots[r]);
+          if (roots[r] !== document && matchText(roots[r], step)) out.push(roots[r]);
         }
       } else if (step.kind === "label") {
         for (r = 0; r < roots.length; r++) {
           base = roots[r]; all = base.querySelectorAll("*");
-          for (j = 0; j < all.length; j++) { e = all[j]; if (matchLabel(e, step.value, step.exact)) out.push(e); }
+          for (j = 0; j < all.length; j++) { e = all[j]; if (matchLabel(e, step)) out.push(e); }
         }
       } else if (step.kind === "placeholder") {
         for (r = 0; r < roots.length; r++) {
           base = roots[r]; all = base.querySelectorAll("[placeholder]");
-          for (j = 0; j < all.length; j++) { e = all[j]; if (matchAttr(e, "placeholder", step.value, step.exact)) out.push(e); }
+          for (j = 0; j < all.length; j++) { e = all[j]; if (matchAttr(e, "placeholder", step)) out.push(e); }
         }
       } else if (step.kind === "alt") {
         for (r = 0; r < roots.length; r++) {
           base = roots[r]; all = base.querySelectorAll("[alt]");
-          for (j = 0; j < all.length; j++) { e = all[j]; if (matchAttr(e, "alt", step.value, step.exact)) out.push(e); }
+          for (j = 0; j < all.length; j++) { e = all[j]; if (matchAttr(e, "alt", step)) out.push(e); }
         }
       } else if (step.kind === "title") {
         for (r = 0; r < roots.length; r++) {
           base = roots[r]; all = base.querySelectorAll("[title]");
-          for (j = 0; j < all.length; j++) { e = all[j]; if (matchAttr(e, "title", step.value, step.exact)) out.push(e); }
+          for (j = 0; j < all.length; j++) { e = all[j]; if (matchAttr(e, "title", step)) out.push(e); }
         }
       } else if (step.kind === "testid") {
         var attr = step.attr || "data-testid";

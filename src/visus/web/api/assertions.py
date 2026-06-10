@@ -1,9 +1,21 @@
 from __future__ import annotations
 
+import re
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from visus.web.api.locator import Locator
+    from visus.web.api.locator import Locator, TextArg
+
+
+def _text_arg(value: TextArg, exact: bool) -> dict[str, object]:
+    """Encode a text matcher argument: {value, exact} for str, {regex, flags} for Pattern.
+
+    Regex flags are passed as the Python int so the (Python-side) expect engine
+    can re-compile the pattern faithfully.
+    """
+    if isinstance(value, re.Pattern):
+        return {"regex": value.pattern, "flags": value.flags}
+    return {"value": value, "exact": exact}
 
 
 class LocatorAssertions:
@@ -38,21 +50,21 @@ class LocatorAssertions:
         self._poll("checked", None, timeout)
 
     def to_have_text(
-        self, expected: str, *, exact: bool = True, timeout: int | None = None
+        self, expected: TextArg, *, exact: bool = True, timeout: int | None = None
     ) -> None:
-        self._poll("text", {"value": expected, "exact": exact}, timeout)
+        self._poll("text", _text_arg(expected, exact), timeout)
 
-    def to_contain_text(self, expected: str, *, timeout: int | None = None) -> None:
-        self._poll("text", {"value": expected, "exact": False}, timeout)
+    def to_contain_text(self, expected: TextArg, *, timeout: int | None = None) -> None:
+        self._poll("text", _text_arg(expected, False), timeout)
 
     def to_have_count(self, count: int, *, timeout: int | None = None) -> None:
         self._poll("count", {"count": count}, timeout)
 
-    def to_have_value(self, value: str, *, timeout: int | None = None) -> None:
-        self._poll("value", {"value": value}, timeout)
+    def to_have_value(self, value: TextArg, *, timeout: int | None = None) -> None:
+        self._poll("value", _text_arg(value, True), timeout)
 
-    def to_have_attribute(self, name: str, value: str, *, timeout: int | None = None) -> None:
-        self._poll("attribute", {"name": name, "value": value}, timeout)
+    def to_have_attribute(self, name: str, value: TextArg, *, timeout: int | None = None) -> None:
+        self._poll("attribute", {"name": name, **_text_arg(value, True)}, timeout)
 
     def to_have_class(self, class_name: str, *, timeout: int | None = None) -> None:
         self._poll("class", {"value": class_name, "mode": "exact"}, timeout)
