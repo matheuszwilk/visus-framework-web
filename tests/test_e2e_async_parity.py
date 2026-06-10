@@ -330,3 +330,55 @@ async def test_async_set_input_files_via_field(base_url: str) -> None:
             assert (await page.locator("#upname").text_content()) == os.path.basename(tmp)
         finally:
             os.unlink(tmp)
+
+
+# ---------------------------------------------------------------------------
+# 0.1.0 surface — waits, page assertions, composition, network, storage
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.browser
+async def test_async_new_surface_smoke(base_url: str, tmp_path: object) -> None:
+    import re
+
+    from visus.web.async_api import expect
+
+    async with await launch(headless=True) as browser:
+        page = await browser.new_page()
+        await page.goto(f"{base_url}/forms.html")
+
+        # waits
+        await page.wait_for_url("*forms*")
+        await page.wait_for_load_state()
+        await page.locator("#user").wait_for()
+
+        # page assertions + regex
+        await expect(page).to_have_title(re.compile("forms"))
+        await expect(page.locator("#user")).to_have_value(re.compile("^ad."))
+
+        # composition
+        either = page.locator("#missing").or_(page.locator("#user"))
+        assert await either.count() == 1
+        assert await page.locator("#items li").filter(has_not_text="beta").all_inner_texts() == [
+            "alpha",
+            "gamma",
+        ]
+
+        # locator utilities
+        assert await page.locator("#items li").first().inner_text() == "alpha"
+        box = await page.locator("#user").bounding_box()
+        assert box is not None and box["width"] > 0
+        await page.locator("#search").press_sequentially("ok")
+
+        # network capture (Chromium)
+        await page.evaluate("() => fetch('/page2.html')")
+        resp = await page.wait_for_response("*page2*")
+        assert resp.status == 200 and "html" in (await resp.body())
+
+        # storage state
+        await page.evaluate("() => localStorage.setItem('k', 'v')")
+        ctx = page.context
+        state = await ctx.storage_state()
+        assert any(
+            {"name": "k", "value": "v"} in o["localStorage"] for o in state["origins"]
+        )

@@ -3,8 +3,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING, cast
 
 from visus.web.vision._images import ImageInput, _to_gray
+
+if TYPE_CHECKING:
+    import numpy
+    import numpy.typing as npt
 
 
 @dataclass(frozen=True)
@@ -51,7 +56,9 @@ def find_all_images(
     n = _to_gray(needle)
     if n.shape[0] > h.shape[0] or n.shape[1] > h.shape[1]:
         return []
-    res = cv2.matchTemplate(h, n, cv2.TM_CCOEFF_NORMED)
+    res = cast(
+        "npt.NDArray[numpy.float32]", cv2.matchTemplate(h, n, cv2.TM_CCOEFF_NORMED)
+    )
     nh, nw = n.shape[:2]
     ys, xs = np.where(res >= confidence)
     candidates = sorted(

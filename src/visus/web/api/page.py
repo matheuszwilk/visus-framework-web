@@ -1,13 +1,18 @@
 from __future__ import annotations
 
-from collections.abc import Generator
+import fnmatch
+import re
+from collections.abc import Callable, Generator
 from contextlib import contextmanager
+from dataclasses import replace
 from pathlib import Path
+from time import monotonic, sleep
 from typing import TYPE_CHECKING, Any, cast
 
+from visus.web import errors
 from visus.web.api._steps import run_step
-from visus.web.api.events import Dialog, Download, _ValueHolder
-from visus.web.api.locator import Locator
+from visus.web.api.events import ConsoleMessage, Dialog, Download, NetworkResponse, _ValueHolder
+from visus.web.api.locator import Locator, TextArg
 from visus.web.backends.base import PageDelegate
 from visus.web.config import Defaults
 
@@ -40,6 +45,7 @@ class Page:
                 timeout_ms=timeout if timeout is not None else self._defaults.navigation_timeout_ms,
             ),
             backtrack,
+            slow_mo_ms=self._defaults.slow_mo_ms,
             action_name="goto",
             target=url,
         )
@@ -71,6 +77,86 @@ class Page:
 
     def close(self) -> None:
         self._delegate.close()
+
+    # --- default timeouts (page-level overrides) ---
+
+    def set_default_timeout(self, timeout: int) -> None:
+        """Default timeout (ms) for actions AND navigations on this page.
+
+        Locators created *after* this call pick up the new default; per-call
+        ``timeout=`` still wins. Call it right after creating the page.
+        """
+        self._defaults = replace(
+            self._defaults, action_timeout_ms=timeout, navigation_timeout_ms=timeout
+        )
+
+    def set_default_navigation_timeout(self, timeout: int) -> None:
+        """Default timeout (ms) for navigations only (``goto``/``reload``/history)."""
+        self._defaults = replace(self._defaults, navigation_timeout_ms=timeout)
+
+    # --- web-first synchronization ---
+
+    def _poll_until(self, check: Callable[[], bool], timeout_ms: int, what: str) -> None:
+        deadline = monotonic() + timeout_ms / 1000
+        while True:
+            if check():
+                return
+            if monotonic() >= deadline:
+                raise errors.VisusTimeoutError(f"{what} not satisfied within {timeout_ms}ms")
+            sleep(0.1)
+
+    def wait_for_url(
+        self,
+        url: str | re.Pattern[str] | Callable[[str], bool],
+        *,
+        timeout: int | None = None,
+    ) -> None:
+        """Wait until :attr:`url` matches *url* — a glob string (``"*checkout*"``),
+        a compiled regex (``re.search``), or a predicate over the current URL."""
+        t = timeout if timeout is not None else self._defaults.navigation_timeout_ms
+
+        def check() -> bool:
+            cur = self._delegate.current_url()
+            if isinstance(url, re.Pattern):
+                return bool(url.search(cur))
+            if callable(url):
+                return bool(url(cur))
+            return fnmatch.fnmatch(cur, url) or cur == url
+
+        self._poll_until(check, t, f"wait_for_url({url!r})")
+
+    def wait_for_load_state(self, state: str = "load", *, timeout: int | None = None) -> None:
+        """Wait for ``document.readyState``: ``"load"`` (complete) or
+        ``"domcontentloaded"`` (interactive or complete)."""
+        if state not in ("load", "domcontentloaded"):
+            raise ValueError("state must be 'load' or 'domcontentloaded'")
+        want = ("complete",) if state == "load" else ("interactive", "complete")
+        t = timeout if timeout is not None else self._defaults.navigation_timeout_ms
+        self._poll_until(
+            lambda: self._delegate.evaluate("() => document.readyState", None) in want,
+            t,
+            f"wait_for_load_state({state!r})",
+        )
+
+    def wait_for_function(
+        self, expression: str, arg: object = None, *, timeout: int | None = None
+    ) -> object:
+        """Poll *expression* (a JS function) until it returns a truthy value;
+        return that value."""
+        t = timeout if timeout is not None else self._defaults.action_timeout_ms
+        result: list[object] = [None]
+
+        def check() -> bool:
+            result[0] = self._delegate.evaluate(expression, arg)
+            return bool(result[0])
+
+        self._poll_until(check, t, f"wait_for_function({expression!r})")
+        return result[0]
+
+    def wait_for_timeout(self, timeout: float) -> None:
+        """Sleep for *timeout* milliseconds. Discouraged — prefer web-first waits
+        (:meth:`wait_for_url`, ``locator.wait_for``, ``expect``)."""
+        sleep(timeout / 1000)
 
     @property
     def is_closed(self) -> bool:
@@ -113,22 +199,24 @@ class Page:
 
         return FrameLocator(self._delegate, (_frame_step(selector),), self._defaults)
 
-    def get_by_role(self, role: str, *, name: str | None = None, exact: bool = False) -> Locator:
+    def get_by_role(
+        self, role: str, *, name: TextArg | None = None, exact: bool = False
+    ) -> Locator:
         return Locator(self._delegate, (), self._defaults).get_by_role(role, name=name, exact=exact)
 
-    def get_by_text(self, text: str, *, exact: bool = False) -> Locator:
+    def get_by_text(self, text: TextArg, *, exact: bool = False) -> Locator:
         return Locator(self._delegate, (), self._defaults).get_by_text(text, exact=exact)
 
-    def get_by_label(self, text: str, *, exact: bool = False) -> Locator:
+    def get_by_label(self, text: TextArg, *, exact: bool = False) -> Locator:
         return Locator(self._delegate, (), self._defaults).get_by_label(text, exact=exact)
 
-    def get_by_placeholder(self, text: str, *, exact: bool = False) -> Locator:
+    def get_by_placeholder(self, text: TextArg, *, exact: bool = False) -> Locator:
         return Locator(self._delegate, (), self._defaults).get_by_placeholder(text, exact=exact)
 
-    def get_by_alt_text(self, text: str, *, exact: bool = False) -> Locator:
+    def get_by_alt_text(self, text: TextArg, *, exact: bool = False) -> Locator:
         return Locator(self._delegate, (), self._defaults).get_by_alt_text(text, exact=exact)
 
-    def get_by_title(self, text: str, *, exact: bool = False) -> Locator:
+    def get_by_title(self, text: TextArg, *, exact: bool = False) -> Locator:
         return Locator(self._delegate, (), self._defaults).get_by_title(text, exact=exact)
 
     def get_by_test_id(self, test_id: str) -> Locator:
@@ -275,6 +363,101 @@ class Page:
     def set_offline(self, offline: bool) -> None:
         """Toggle offline mode (Chromium only, via CDP). Restores with ``set_offline(False)``."""
         self._delegate.set_offline(offline)
+
+    # --- network/console capture (Chromium) ---
+
+    def network_requests(self) -> list[NetworkResponse]:
+        """Every network response captured so far (document, XHR/fetch, assets).
+
+        Chromium only. Use it to debug, or to assert that the API call behind a
+        UI action actually happened: ``[r for r in page.network_requests() if "/api/" in r.url]``.
+        """
+        return [NetworkResponse(self._delegate, r) for r in self._delegate.network_requests()]
+
+    def console_messages(self) -> list[ConsoleMessage]:
+        """Every console message captured so far (``console.*``, uncaught errors).
+
+        Chromium only.
+        """
+        return [
+            ConsoleMessage(level=cast(str, m.get("level", "")), text=cast(str, m.get("text", "")))
+            for m in self._delegate.console_messages()
+        ]
+
+    def wait_for_response(
+        self, url_pattern: str, *, timeout: int | None = None
+    ) -> NetworkResponse:
+        """Wait for the next response whose URL matches *url_pattern* (glob like
+        ``"*api/orders*"`` or plain substring). Chromium only."""
+        rec = self._delegate.wait_for_response(
+            url_pattern,
+            timeout_ms=timeout if timeout is not None else self._defaults.action_timeout_ms,
+        )
+        return NetworkResponse(self._delegate, rec)
+
+    @contextmanager
+    def expect_response(
+        self, url_pattern: str, *, timeout: int | None = None
+    ) -> Generator[_ValueHolder, None, None]:
+        """Context manager: run an action and capture the response it triggers::
+
+            with page.expect_response("*api/login*") as info:
+                page.get_by_role("button", name="Sign in").click()
+            assert info.value.ok
+        """
+        marker = self._delegate.network_marker()
+        holder: _ValueHolder = _ValueHolder()
+        yield holder
+        rec = self._delegate.wait_for_response(
+            url_pattern,
+            timeout_ms=timeout if timeout is not None else self._defaults.action_timeout_ms,
+            from_index=marker,
+        )
+        holder._set(NetworkResponse(self._delegate, rec))
+
+    # --- init scripts + emulation ---
+
+    def add_init_script(self, script: str) -> None:
+        """Inject *script* before every document loaded from now on (Chromium only).
+
+        Ideal for seeding mocks or flags before the app boots — call it before
+        :meth:`goto`.
+        """
+        self._delegate.add_init_script(script)
+
+    def set_geolocation(
+        self, latitude: float, longitude: float, *, accuracy: float = 100
+    ) -> None:
+        """Override the device geolocation (Chromium only).
+
+        Grant the permission first: ``page.grant_permissions(["geolocation"])``.
+        """
+        self._delegate.set_geolocation(latitude, longitude, accuracy=accuracy)
+
+    def grant_permissions(self, permissions: list[str], *, origin: str | None = None) -> None:
+        """Grant browser permissions, e.g. ``["geolocation", "notifications"]``
+        (Chromium only); optionally restricted to *origin*."""
+        self._delegate.grant_permissions(permissions, origin=origin)
+
+    def set_device_metrics(
+        self,
+        width: int,
+        height: int,
+        *,
+        device_scale_factor: float = 1.0,
+        mobile: bool = False,
+    ) -> None:
+        """Emulate a device viewport: size, pixel ratio and the mobile flag
+        (Chromium only). E.g. iPhone-ish: ``set_device_metrics(390, 844,
+        device_scale_factor=3.0, mobile=True)``."""
+        self._delegate.set_device_metrics(
+            width, height, device_scale_factor=device_scale_factor, mobile=mobile
+        )
+
+    def set_viewport_size(self, width: int, height: int) -> None:
+        """Resize the window so the page viewport is exactly width×height
+        (works on every browser)."""
+        self._delegate.set_viewport_size(width, height)
 
     @contextmanager
     def expect_download(self, *, timeout: int | None = None) -> Generator[_ValueHolder, None, None]:

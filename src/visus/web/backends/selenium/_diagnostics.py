@@ -35,7 +35,16 @@ def _describe_step(step: dict[str, Any]) -> str:
     if kind in ("css", "xpath"):
         return f"{kind} {_q(step.get('value'))}"
     if kind == "filter_has_text":
-        return f"filtered by text {_q(step.get('value'))}"
+        return f"filtered by text {_q(step.get('value') or step.get('regex'))}"
+    if kind == "filter_has_not_text":
+        return f"filtered by NOT text {_q(step.get('value') or step.get('regex'))}"
+    if kind in ("filter_has", "filter_has_not", "or", "and"):
+        inner = step.get("steps") or []
+        parts = [_describe_step(s) for s in inner if isinstance(s, dict)]
+        label = {"filter_has": "has", "filter_has_not": "has not", "or": "or", "and": "and"}[
+            str(kind)
+        ]
+        return f"{label}({' » '.join(p for p in parts if p)})"
     if kind == "nth":
         idx = step.get("index")
         which = {0: "first", -1: "last"}.get(idx, f"index {idx}")  # type: ignore[arg-type]
@@ -112,9 +121,18 @@ def _suggest(driver: WebDriver, steps: list[dict[str, Any]]) -> str | None:
 
 
 def build_action_error(
-    driver: WebDriver, selector: str, name: str, timeout_ms: int, last_reason: str
+    driver: WebDriver,
+    selector: str,
+    name: str,
+    timeout_ms: int,
+    last_reason: str,
+    wait_log: list[tuple[float, str]] | None = None,
 ) -> str:
     """Compose a friendly, structured failure message for a timed-out action.
+
+    *wait_log* is the actionability wait history — (elapsed_seconds, reason)
+    transitions recorded while the action retried; the last few are rendered as
+    a timeline so the developer can see WHAT the action was waiting for.
 
     Best-effort: any page query failure degrades gracefully to the basic message.
     """
@@ -132,6 +150,11 @@ def build_action_error(
         pass
 
     lines.append(f"  status: {last_reason}")
+
+    if wait_log:
+        shown = wait_log[-6:]  # the last transitions tell the story
+        timeline = " → ".join(f"{t:.1f}s {reason}" for t, reason in shown)
+        lines.append(f"  log:    {timeline}")
 
     try:
         steps = json.loads(selector)

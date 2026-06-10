@@ -53,3 +53,87 @@ def test_dispose_removes_both_temp_dirs_and_is_idempotent():
     # idempotent: a second dispose must be a no-op
     delegate.dispose()
     assert driver.quit_calls == 1
+
+
+class _SpawnableFakeDriver(_FakeDriver):
+    @property
+    def window_handles(self):
+        return ["win-1"]
+
+    def execute_cdp_cmd(self, cmd, params):
+        raise AttributeError("no CDP on fake driver")
+
+
+def test_launch_with_user_data_dir_uses_and_preserves_it(tmp_path):
+    captured = {}
+
+    def opts(*, headless, download_dir, user_data_dir):
+        captured["user_data_dir"] = user_data_dir
+        return None
+
+    cfg = BrowserConfig(
+        engine=Engine.CHROME,
+        options_factory=opts,
+        service_factory=lambda: None,
+        driver_factory=lambda **k: _SpawnableFakeDriver(),
+    )
+    profile = tmp_path / "my-profile"
+    delegate = SeleniumBackend().launch(cfg, headless=True, user_data_dir=str(profile))
+    assert captured["user_data_dir"] == str(profile)
+    assert profile.is_dir()  # created on demand
+    delegate.dispose()
+    assert profile.is_dir()  # NEVER deleted: it is the user's persistent profile
+
+
+def test_launch_with_remote_url_uses_remote_webdriver(monkeypatch):
+    created = {}
+
+    class FakeRemote(_SpawnableFakeDriver):
+        def __init__(self, *, command_executor, options):
+            super().__init__()
+            created["url"] = command_executor
+
+    import visus.web.backends.selenium_backend as sb
+
+    monkeypatch.setattr(sb.webdriver, "Remote", FakeRemote)
+
+    def fail_factory(**k):
+        raise AssertionError("local driver_factory must not be used for remote")
+
+    cfg = BrowserConfig(
+        engine=Engine.CHROME,
+        options_factory=lambda **k: None,
+        service_factory=lambda: None,
+        driver_factory=fail_factory,
+    )
+    delegate = SeleniumBackend().launch(cfg, headless=True, remote_url="http://grid:4444/wd/hub")
+    assert created["url"] == "http://grid:4444/wd/hub"
+    delegate.dispose()
+
+
+def test_cleanup_respects_owns_profile(tmp_path):
+    import weakref
+
+    from visus.web.backends.selenium_backend import _cleanup
+
+    class _D:
+        def __init__(self):
+            self.quit_calls = 0
+
+        def quit(self):
+            self.quit_calls += 1
+
+    d = _D()
+    profile = tmp_path / "profile"
+    profile.mkdir()
+    dl = tmp_path / "dl"
+    dl.mkdir()
+    _cleanup(weakref.ref(d), str(profile), str(dl), False)
+    assert d.quit_calls == 1
+    assert profile.is_dir()  # user-owned profile preserved
+    assert not dl.exists()  # temp download dir removed
+
+    dl.mkdir()
+    _cleanup(weakref.ref(d), str(profile), str(dl), True)
+    assert not profile.exists()
+    assert not dl.exists()

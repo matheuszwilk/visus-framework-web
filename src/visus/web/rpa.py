@@ -48,6 +48,7 @@ def rpa(
     *,
     engine: Engine | str = Engine.CHROME,
     headless: bool = False,
+    slow_mo: int = 0,
     outdir: str | None = None,
     report: bool = True,
     summary: bool = True,
@@ -62,6 +63,7 @@ def rpa(
         name: label for this run (used in the output folder name).
         engine: ``"chrome"`` | ``"edge"`` | ``"firefox"`` | ``"edge_ie"`` (or an :class:`Engine`).
         headless: run without a visible window.
+        slow_mo: delay (ms) before each action/navigation — watch the run live.
         outdir: where to write run.zip/report.html (default ``./visus-runs/<name>-<ts>/``).
         report: render report.html on exit (it is written even when a step fails).
         summary: print a one-block run summary on exit.
@@ -85,7 +87,7 @@ def rpa(
     try:
         with tracing.record(str(zip_path), report=str(report_path) if report else None) as rec:
             box["rec"] = rec
-            with launch(engine, headless=headless) as browser:
+            with launch(engine, headless=headless, slow_mo=slow_mo) as browser:
                 yield browser.new_page()
     except (_errors.VisusWebError, AssertionError) as exc:
         # an action failure (VisusWebError) OR an expect()/assert failure → present it

@@ -183,3 +183,40 @@ def test_record_report_param_renders_even_when_body_raises(tmp_path):
     assert report_path.exists()
     assert "visus.web run report" in report_path.read_text(encoding="utf-8")
     _reset()
+
+
+def test_rpa_print_summary_renders_failure(capsys, tmp_path):
+    from pathlib import Path
+
+    from visus.web.rpa import _print_summary
+
+    class _Rec:
+        def summary(self):
+            return {
+                "steps": [("click", True), ("fill", False)],
+                "failures": 1,
+                "total": 2,
+                "backtrack_steps": 1,
+            }
+
+    _print_summary(
+        _Rec(), tmp_path, Path(tmp_path) / "report.html", error=RuntimeError("boom\nline2")
+    )
+    out = capsys.readouterr().out
+    assert "FAILED" in out
+    assert "fill(FAILED)" in out
+    assert "boom" in out and "line2" in out
+    assert "report" in out
+
+
+def test_rpa_print_summary_ok_without_report(capsys, tmp_path):
+    from visus.web.rpa import _print_summary
+
+    class _Rec:
+        def summary(self):
+            return {"steps": [], "failures": 0, "total": 0, "backtrack_steps": 0}
+
+    _print_summary(_Rec(), tmp_path, None)
+    out = capsys.readouterr().out
+    assert "[OK]" in out
+    assert "report" not in out

@@ -229,3 +229,53 @@ def test_expect_download_holder_raises_before_exit():
     with page.expect_download() as info:
         with pytest.raises(VisusWebError, match="not available until the block completes"):
             _ = info.value
+
+
+def test_set_default_timeout_affects_actions_and_navigation():
+    class Rec:
+        def __init__(self):
+            self.action_t = None
+            self.nav_t = None
+
+        def locator_click(self, s, *, timeout_ms, force):
+            self.action_t = timeout_ms
+
+        def goto(self, url, *, wait_until, timeout_ms):
+            self.nav_t = timeout_ms
+
+    rec = Rec()
+    page = Page(rec, Defaults())
+    page.set_default_timeout(1234)
+    page.locator("#x").click()
+    page.goto("https://x.test")
+    assert rec.action_t == 1234
+    assert rec.nav_t == 1234
+    page.set_default_navigation_timeout(777)
+    page.goto("https://x.test")
+    page.locator("#x").click()
+    assert rec.nav_t == 777
+    assert rec.action_t == 1234  # action default untouched
+
+
+def test_context_set_default_timeout_applies_to_new_pages():
+    class RecPage:
+        def __init__(self):
+            self.t = None
+
+        def locator_click(self, s, *, timeout_ms, force):
+            self.t = timeout_ms
+
+    class RecCtx:
+        def __init__(self):
+            self.page = RecPage()
+
+        def new_page(self):
+            return self.page
+
+    from visus.web.api.context import Context
+
+    ctx = Context(RecCtx(), Defaults())
+    ctx.set_default_timeout(555)
+    page = ctx.new_page()
+    page.locator("#x").click()
+    assert page._delegate.t == 555

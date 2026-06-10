@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING
+import re
+from typing import TYPE_CHECKING, Union, cast
 
 from visus.web.api._steps import run_step
 
@@ -9,6 +10,40 @@ if TYPE_CHECKING:
     from visus.web.api.frame_locator import FrameLocator
     from visus.web.backends.base import PageDelegate
     from visus.web.config import Defaults
+
+TextArg = Union[str, "re.Pattern[str]"]
+"""A text matcher: plain string (substring, or exact with ``exact=True``) or a
+compiled :class:`re.Pattern` (matched with JS ``RegExp.test`` semantics)."""
+
+
+def _js_flags(flags: int) -> str:
+    """Translate Python re flags into the JS RegExp flags we support (i, m, s)."""
+    out = ""
+    if flags & re.IGNORECASE:
+        out += "i"
+    if flags & re.MULTILINE:
+        out += "m"
+    if flags & re.DOTALL:
+        out += "s"
+    return out
+
+
+def _text_step(kind: str, text: TextArg, exact: bool) -> dict[str, object]:
+    """Encode a text-ish matcher step: {value, exact} for str, {regex, flags} for re.Pattern."""
+    if isinstance(text, re.Pattern):
+        return {"kind": kind, "regex": text.pattern, "flags": _js_flags(text.flags)}
+    return {"kind": kind, "value": text, "exact": exact}
+
+
+def _embed(other: Locator) -> list[dict[str, object]]:
+    """Steps of *other* for embedding into a composed step (filter_has / or / and).
+
+    Composition is evaluated inside a single document, so a locator that crosses
+    into an iframe cannot be embedded.
+    """
+    if any(s.get("kind") == "frame" for s in other._steps):
+        raise ValueError("cannot compose locators that cross into an iframe")
+    return list(other._steps)
 
 
 class Locator:
@@ -28,23 +63,34 @@ class Locator:
         return Locator(self._delegate, self._steps + (step,), self._defaults)
 
     # --- builders (pure string/dict surgery; never touch the DOM) ---
-    def get_by_role(self, role: str, *, name: str | None = None, exact: bool = False) -> Locator:
+    def get_by_role(
+        self, role: str, *, name: TextArg | None = None, exact: bool = False
+    ) -> Locator:
+        if isinstance(name, re.Pattern):
+            return self._child(
+                {
+                    "kind": "role",
+                    "role": role,
+                    "nameRegex": name.pattern,
+                    "nameFlags": _js_flags(name.flags),
+                }
+            )
         return self._child({"kind": "role", "role": role, "name": name, "exact": exact})
 
-    def get_by_text(self, text: str, *, exact: bool = False) -> Locator:
-        return self._child({"kind": "text", "value": text, "exact": exact})
+    def get_by_text(self, text: TextArg, *, exact: bool = False) -> Locator:
+        return self._child(_text_step("text", text, exact))
 
-    def get_by_label(self, text: str, *, exact: bool = False) -> Locator:
-        return self._child({"kind": "label", "value": text, "exact": exact})
+    def get_by_label(self, text: TextArg, *, exact: bool = False) -> Locator:
+        return self._child(_text_step("label", text, exact))
 
-    def get_by_placeholder(self, text: str, *, exact: bool = False) -> Locator:
-        return self._child({"kind": "placeholder", "value": text, "exact": exact})
+    def get_by_placeholder(self, text: TextArg, *, exact: bool = False) -> Locator:
+        return self._child(_text_step("placeholder", text, exact))
 
-    def get_by_alt_text(self, text: str, *, exact: bool = False) -> Locator:
-        return self._child({"kind": "alt", "value": text, "exact": exact})
+    def get_by_alt_text(self, text: TextArg, *, exact: bool = False) -> Locator:
+        return self._child(_text_step("alt", text, exact))
 
-    def get_by_title(self, text: str, *, exact: bool = False) -> Locator:
-        return self._child({"kind": "title", "value": text, "exact": exact})
+    def get_by_title(self, text: TextArg, *, exact: bool = False) -> Locator:
+        return self._child(_text_step("title", text, exact))
 
     def get_by_test_id(self, test_id: str) -> Locator:
         return self._child({"kind": "testid", "value": test_id})
@@ -80,10 +126,34 @@ class Locator:
 
         return FrameLocator(self._delegate, self._steps + (_frame_step(selector),), self._defaults)
 
-    def filter(self, *, has_text: str | None = None) -> Locator:
+    def filter(
+        self,
+        *,
+        has_text: TextArg | None = None,
+        has_not_text: TextArg | None = None,
+        has: Locator | None = None,
+        has_not: Locator | None = None,
+    ) -> Locator:
+        """Narrow the matched set: by contained text (``has_text``/``has_not_text``)
+        and/or by a relative inner locator (``has``/``has_not``)."""
+        loc = self
         if has_text is not None:
-            return self._child({"kind": "filter_has_text", "value": has_text})
-        return self
+            loc = loc._child(_text_step("filter_has_text", has_text, False))
+        if has_not_text is not None:
+            loc = loc._child(_text_step("filter_has_not_text", has_not_text, False))
+        if has is not None:
+            loc = loc._child({"kind": "filter_has", "steps": _embed(has)})
+        if has_not is not None:
+            loc = loc._child({"kind": "filter_has_not", "steps": _embed(has_not)})
+        return loc
+
+    def or_(self, other: Locator) -> Locator:
+        """Elements matching this locator OR *other* (union, document order)."""
+        return self._child({"kind": "or", "steps": _embed(other)})
+
+    def and_(self, other: Locator) -> Locator:
+        """Elements matching this locator AND *other* (intersection)."""
+        return self._child({"kind": "and", "steps": _embed(other)})
 
     def first(self) -> Locator:
         return self._child({"kind": "nth", "index": 0})
@@ -97,6 +167,29 @@ class Locator:
     @property
     def _encoded(self) -> str:
         return json.dumps(list(self._steps))
+
+    def wait_for(self, *, state: str = "visible", timeout: int | None = None) -> None:
+        """Wait until the locator reaches *state*: ``visible`` (default),
+        ``hidden``, ``attached`` (≥1 match) or ``detached`` (0 matches).
+
+        Raises :class:`~visus.web.errors.VisusTimeoutError` on timeout.
+        """
+        if state not in ("visible", "hidden", "attached", "detached"):
+            raise ValueError(
+                f"unknown state {state!r}; use visible|hidden|attached|detached"
+            )
+        from visus.web import errors
+
+        t = timeout if timeout is not None else self._defaults.action_timeout_ms
+        try:
+            self._delegate.expect_poll(self._encoded, state, None, is_not=False, timeout_ms=t)
+        except AssertionError as exc:
+            from visus.web.backends.selenium._diagnostics import describe_target
+
+            raise errors.VisusTimeoutError(
+                f"wait_for: {describe_target(self._encoded)} did not become {state}"
+                f" within {t}ms"
+            ) from exc
 
     # --- reads (resolve against the live page) ---
     def count(self) -> int:
@@ -121,6 +214,7 @@ class Locator:
                 self._encoded, timeout_ms=self._t(timeout), force=force
             ),
             backtrack,
+            slow_mo_ms=self._defaults.slow_mo_ms,
             action_name="click",
             selector=self._encoded,
         )
@@ -139,6 +233,7 @@ class Locator:
                 self._encoded, value, timeout_ms=self._t(timeout), force=force
             ),
             backtrack,
+            slow_mo_ms=self._defaults.slow_mo_ms,
             action_name="fill",
             selector=self._encoded,
         )
@@ -152,6 +247,7 @@ class Locator:
                 self._encoded, timeout_ms=self._t(timeout), force=force
             ),
             backtrack,
+            slow_mo_ms=self._defaults.slow_mo_ms,
             action_name="hover",
             selector=self._encoded,
         )
@@ -165,6 +261,7 @@ class Locator:
                 self._encoded, timeout_ms=self._t(timeout), force=force
             ),
             backtrack,
+            slow_mo_ms=self._defaults.slow_mo_ms,
             action_name="dblclick",
             selector=self._encoded,
         )
@@ -178,6 +275,7 @@ class Locator:
                 self._encoded, True, timeout_ms=self._t(timeout), force=force
             ),
             backtrack,
+            slow_mo_ms=self._defaults.slow_mo_ms,
             action_name="check",
             selector=self._encoded,
         )
@@ -191,6 +289,7 @@ class Locator:
                 self._encoded, False, timeout_ms=self._t(timeout), force=force
             ),
             backtrack,
+            slow_mo_ms=self._defaults.slow_mo_ms,
             action_name="uncheck",
             selector=self._encoded,
         )
@@ -209,6 +308,7 @@ class Locator:
                 self._encoded, checked, timeout_ms=self._t(timeout), force=force
             ),
             backtrack,
+            slow_mo_ms=self._defaults.slow_mo_ms,
             action_name="set_checked",
             selector=self._encoded,
         )
@@ -228,7 +328,29 @@ class Locator:
                 self._encoded, value=value, label=label, index=index, timeout_ms=self._t(timeout)
             ),
             backtrack,
+            slow_mo_ms=self._defaults.slow_mo_ms,
             action_name="select_option",
+            selector=self._encoded,
+        )
+
+    def press_sequentially(
+        self,
+        text: str,
+        *,
+        delay: int = 0,
+        timeout: int | None = None,
+        backtrack: bool | int = False,
+    ) -> None:
+        """Type *text* one character at a time (real key events), waiting *delay*
+        milliseconds between characters. Unlike :meth:`fill`, does not clear first."""
+        run_step(
+            self._delegate,
+            lambda: self._delegate.locator_press_sequentially(
+                self._encoded, text, delay_ms=delay, timeout_ms=self._t(timeout)
+            ),
+            backtrack,
+            slow_mo_ms=self._defaults.slow_mo_ms,
+            action_name="press_sequentially",
             selector=self._encoded,
         )
 
@@ -237,6 +359,7 @@ class Locator:
             self._delegate,
             lambda: self._delegate.locator_press(self._encoded, key, timeout_ms=self._t(timeout)),
             backtrack,
+            slow_mo_ms=self._defaults.slow_mo_ms,
             action_name="press",
             selector=self._encoded,
         )
@@ -246,6 +369,7 @@ class Locator:
             self._delegate,
             lambda: self._delegate.locator_focus(self._encoded, timeout_ms=self._t(timeout)),
             backtrack,
+            slow_mo_ms=self._defaults.slow_mo_ms,
             action_name="focus",
             selector=self._encoded,
         )
@@ -255,6 +379,7 @@ class Locator:
             self._delegate,
             lambda: self._delegate.locator_blur(self._encoded, timeout_ms=self._t(timeout)),
             backtrack,
+            slow_mo_ms=self._defaults.slow_mo_ms,
             action_name="blur",
             selector=self._encoded,
         )
@@ -268,6 +393,7 @@ class Locator:
                 self._encoded, timeout_ms=self._t(timeout), force=force
             ),
             backtrack,
+            slow_mo_ms=self._defaults.slow_mo_ms,
             action_name="clear",
             selector=self._encoded,
         )
@@ -281,6 +407,7 @@ class Locator:
                 self._encoded, target._encoded, timeout_ms=self._t(timeout)
             ),
             backtrack,
+            slow_mo_ms=self._defaults.slow_mo_ms,
             action_name="drag_to",
             selector=self._encoded,
         )
@@ -312,6 +439,48 @@ class Locator:
     def evaluate(self, expression: str, arg: object = None) -> object:
         return self._delegate.locator_evaluate(self._encoded, expression, arg)
 
+    def inner_text(self) -> str:
+        """The element's rendered text (``el.innerText`` — visible text only)."""
+        return cast(str, self.evaluate("el => el.innerText"))
+
+    def inner_html(self) -> str:
+        """The element's inner HTML markup."""
+        return cast(str, self.evaluate("el => el.innerHTML"))
+
+    def all_inner_texts(self) -> list[str]:
+        """``inner_text`` of every matching element, in document order."""
+        return [loc.inner_text() for loc in self.all()]
+
+    def bounding_box(self) -> dict[str, float] | None:
+        """The element's bounding box as ``{x, y, width, height}`` (viewport
+        coordinates), or ``None`` when the locator matches nothing."""
+        if self.count() == 0:
+            return None
+        return cast(
+            "dict[str, float]",
+            self.evaluate(
+                "el => { const r = el.getBoundingClientRect();"
+                " return {x: r.x, y: r.y, width: r.width, height: r.height}; }"
+            ),
+        )
+
+    def dispatch_event(self, type: str, event_init: dict[str, object] | None = None) -> None:
+        """Dispatch a synthetic DOM event of *type* on the element (bubbles by default)."""
+        self.evaluate(
+            "(el, a) => el.dispatchEvent(new Event(a.type,"
+            " Object.assign({bubbles: true, cancelable: true, composed: true}, a.init || {})))",
+            {"type": type, "init": event_init},
+        )
+
+    def scroll_into_view_if_needed(self) -> None:
+        """Scroll the element to the center of the viewport."""
+        self.evaluate("el => el.scrollIntoView({block: 'center', inline: 'center'})")
+
+    def highlight(self) -> None:
+        """Draw the debug highlight box around the element (remove with the next
+        highlight, or via ``page.clear_highlights()`` for the numbered overlay)."""
+        self.evaluate("el => window.__visus.highlight(el)")
+
     def screenshot(self, *, path: str | None = None) -> bytes:
         from pathlib import Path
 
@@ -326,6 +495,7 @@ class Locator:
             self._delegate,
             lambda: self._delegate.locator_set_input_files(self._encoded, paths),
             backtrack,
+            slow_mo_ms=self._defaults.slow_mo_ms,
             action_name="set_input_files",
             selector=self._encoded,
         )

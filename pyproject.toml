@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "visus-web"
-version = "0.0.1"
+version = "0.1.0"
 description = "Modern, Playwright-style web automation on a pure Selenium engine, with BotCity RPA reach."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -40,10 +40,18 @@ mcp = [
 cli = [
     "typer>=0.12.0",
 ]
+docs = [
+    "mkdocs>=1.6.0",
+    "mkdocs-material>=9.5.0",
+    "mkdocstrings[python]>=0.25.0",
+]
 
 [project.scripts]
 visus = "visus.web.cli.main:app"
 visus-web-mcp = "visus.web.mcp.server:main"
+
+[project.entry-points.pytest11]
+visus_web = "visus.web.pytest_plugin"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/visus"]
@@ -55,7 +63,10 @@ markers = [
 ]
 timeout = 60
 asyncio_mode = "auto"
-addopts = "-n auto --dist loadfile --cov=visus.web --cov-report=term-missing --cov-fail-under=90"
+# -p no:visus_web: our own pytest11 entry point would import visus.web BEFORE
+# pytest-cov starts measuring, zeroing out import-time coverage. The plugin is
+# still exercised explicitly by tests/test_pytest_plugin.py (pytester sessions).
+addopts = "-p no:visus_web -n auto --dist loadfile --cov=visus.web --cov-report=term-missing --cov-fail-under=90"
 
 [tool.ruff]
 line-length = 100

@@ -14,7 +14,7 @@ from visus.web.engine import Engine
 from visus.web.registry import get_browser_config
 from visus.web.rpa import rpa
 
-__version__ = "0.0.1"
+__version__ = "0.1.0"
 
 __all__ = [
     "launch",
@@ -30,8 +30,25 @@ __all__ = [
 ]
 
 
-def launch(engine: Engine | str = Engine.CHROME, *, headless: bool = False) -> Browser:
+def launch(
+    engine: Engine | str = Engine.CHROME,
+    *,
+    headless: bool = False,
+    slow_mo: int = 0,
+    user_data_dir: str | None = None,
+    remote_url: str | None = None,
+) -> Browser:
     """Launch a browser and return a Browser handle.
+
+    *slow_mo* delays every action/navigation by the given milliseconds — handy
+    to watch a script drive the page in real time.
+
+    *user_data_dir* reuses (or creates) a persistent browser profile instead of
+    a throwaway temp profile — cookies, localStorage and logins survive across
+    runs. The directory is never deleted by visus.
+
+    *remote_url* opens the session on a Selenium Grid / Remote WebDriver
+    (e.g. ``"http://grid:4444/wd/hub"``) instead of spawning a local browser.
 
     Usage:
         with launch(headless=True) as browser:
@@ -41,5 +58,7 @@ def launch(engine: Engine | str = Engine.CHROME, *, headless: bool = False) -> B
     resolved = Engine.from_str(engine)
     config = get_browser_config(resolved)
     backend = SeleniumBackend()
-    delegate = backend.launch(config, headless=headless)
-    return Browser(delegate, Defaults())
+    delegate = backend.launch(
+        config, headless=headless, user_data_dir=user_data_dir, remote_url=remote_url
+    )
+    return Browser(delegate, Defaults(slow_mo_ms=slow_mo))

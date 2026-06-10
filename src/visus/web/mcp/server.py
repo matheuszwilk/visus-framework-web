@@ -562,6 +562,44 @@ def browser_handle_dialog(accept: bool = True, prompt_text: str | None = None) -
 
 
 # ---------------------------------------------------------------------------
+# Network / console capture (Chromium)
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool()
+def browser_network_requests(url_filter: str = "") -> list[dict]:  # type: ignore[type-arg]
+    """List network responses captured so far (document, XHR/fetch, assets).
+
+    Each entry has url, method, status, resource_type. Pass *url_filter* to keep
+    only URLs containing that substring (e.g. "/api/"). Chromium engines only.
+    Use it to verify that the API call behind a UI action really happened.
+    """
+    page = _session.page()
+    out = [
+        {"url": r.url, "method": r.method, "status": r.status, "resource_type": r.resource_type}
+        for r in page.network_requests()
+    ]
+    if url_filter:
+        out = [r for r in out if url_filter in str(r["url"])]
+    return out
+
+
+@mcp.tool()
+def browser_console_messages(level: str = "") -> list[dict]:  # type: ignore[type-arg]
+    """List browser console messages captured so far (console.*, uncaught errors).
+
+    Each entry has level (SEVERE/WARNING/INFO) and text. Pass *level* to filter
+    (e.g. "SEVERE" for errors only). Chromium engines only. Check this first
+    when a page misbehaves with no visible cause.
+    """
+    page = _session.page()
+    out = [{"level": m.level, "text": m.text} for m in page.console_messages()]
+    if level:
+        out = [m for m in out if m["level"] == level.upper()]
+    return out
+
+
+# ---------------------------------------------------------------------------
 # Cookies
 # ---------------------------------------------------------------------------
 

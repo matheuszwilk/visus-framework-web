@@ -220,3 +220,24 @@ def test_backtrack_records_depth_even_when_a_replay_fails() -> None:
     with pytest.raises(errors.VisusTimeoutError) as exc:
         run_step(d, action, backtrack=3)
     assert getattr(exc.value, "backtrack_steps", None) == 3  # depth-3 backtrack was attempted
+
+
+def test_run_step_slow_mo_delays_each_step():
+    import time
+
+    calls: list[int] = []
+    t0 = time.monotonic()
+    run_step(_delegate(), lambda: calls.append(1), False, slow_mo_ms=80)
+    assert time.monotonic() - t0 >= 0.07
+    assert calls == [1]
+
+
+def test_launch_and_defaults_expose_slow_mo():
+    import inspect
+
+    from visus.web import launch
+    from visus.web.config import Defaults
+
+    assert "slow_mo" in inspect.signature(launch).parameters
+    assert Defaults().slow_mo_ms == 0
+    assert Defaults(slow_mo_ms=50).slow_mo_ms == 50

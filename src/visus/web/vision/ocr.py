@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
+import numpy.typing as npt
 from PIL import Image
 
 from visus.web.vision._images import ImageInput, _to_ndarray
@@ -29,7 +32,7 @@ def read_text(image: ImageInput) -> str:
     return " ".join(str(line[1]) for line in result)
 
 
-def _preprocess(arr: np.ndarray) -> np.ndarray:
+def _preprocess(arr: npt.NDArray[Any]) -> npt.NDArray[Any]:
     img = Image.fromarray(arr).convert("L")
     img = img.resize((img.width * 2, img.height * 2))  # upscale helps small captchas
     return np.array(img.convert("RGB"))
