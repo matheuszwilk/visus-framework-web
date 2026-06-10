@@ -96,9 +96,11 @@ def run_action(
     ensure_bundle: Callable[[], None],
 ) -> None:
     states = _ACTION_STATES[name]
-    deadline = monotonic() + timeout_ms / 1000
+    start = monotonic()
+    deadline = start + timeout_ms / 1000
     retry = 0
     last_reason = "element not found"
+    wait_log: list[tuple[float, str]] = []  # (elapsed_s, reason) — only transitions
     while True:
         if retry:
             remaining = deadline - monotonic()
@@ -106,6 +108,7 @@ def run_action(
                 break
             sleep(min(_BACKOFF[min(retry, len(_BACKOFF) - 1)], remaining))
         el = _query_strict(driver, ensure_bundle, selector)
+        reason = "element not found" if el is None else None
         if el is not None:
             reason = None if force else _blocking_reason(driver, el, states, name)
             if reason is None:
@@ -117,11 +120,13 @@ def run_action(
                 return
             last_reason = reason
             _log.debug("waiting: %s", reason)
+        if reason is not None and (not wait_log or wait_log[-1][1] != reason):
+            wait_log.append((monotonic() - start, reason))
         retry += 1
         if monotonic() > deadline:
             break
     from visus.web.backends.selenium._diagnostics import build_action_error
 
     raise errors.VisusTimeoutError(
-        build_action_error(driver, selector, name, timeout_ms, last_reason)
+        build_action_error(driver, selector, name, timeout_ms, last_reason, wait_log=wait_log)
     )

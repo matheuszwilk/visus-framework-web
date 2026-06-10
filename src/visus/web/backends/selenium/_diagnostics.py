@@ -121,9 +121,18 @@ def _suggest(driver: WebDriver, steps: list[dict[str, Any]]) -> str | None:
 
 
 def build_action_error(
-    driver: WebDriver, selector: str, name: str, timeout_ms: int, last_reason: str
+    driver: WebDriver,
+    selector: str,
+    name: str,
+    timeout_ms: int,
+    last_reason: str,
+    wait_log: list[tuple[float, str]] | None = None,
 ) -> str:
     """Compose a friendly, structured failure message for a timed-out action.
+
+    *wait_log* is the actionability wait history — (elapsed_seconds, reason)
+    transitions recorded while the action retried; the last few are rendered as
+    a timeline so the developer can see WHAT the action was waiting for.
 
     Best-effort: any page query failure degrades gracefully to the basic message.
     """
@@ -141,6 +150,11 @@ def build_action_error(
         pass
 
     lines.append(f"  status: {last_reason}")
+
+    if wait_log:
+        shown = wait_log[-6:]  # the last transitions tell the story
+        timeline = " → ".join(f"{t:.1f}s {reason}" for t, reason in shown)
+        lines.append(f"  log:    {timeline}")
 
     try:
         steps = json.loads(selector)

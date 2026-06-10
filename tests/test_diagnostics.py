@@ -52,3 +52,43 @@ def test_describe_smart_pasted_element() -> None:
     desc = describe_target(sel)
     assert "pasted element" in desc
     assert "input" in desc
+
+
+def test_build_action_error_includes_wait_log() -> None:
+    from unittest.mock import MagicMock
+
+    from visus.web.backends.selenium._diagnostics import build_action_error
+
+    driver = MagicMock()
+    driver.title = "My Page"
+    driver.current_url = "https://x.test"
+    driver.execute_script.return_value = []
+    msg = build_action_error(
+        driver,
+        _sel({"kind": "css", "value": "#go"}),
+        "click",
+        5000,
+        "element intercepts pointer events (occluded)",
+        wait_log=[
+            (0.0, "not visible (hidden)"),
+            (1.2, "not stable (still animating)"),
+            (2.5, "element intercepts pointer events (occluded)"),
+        ],
+    )
+    assert "log:" in msg
+    assert "0.0s not visible (hidden)" in msg
+    assert "1.2s not stable (still animating)" in msg
+    assert "2.5s element intercepts pointer events (occluded)" in msg
+
+
+def test_build_action_error_without_wait_log_unchanged() -> None:
+    from unittest.mock import MagicMock
+
+    from visus.web.backends.selenium._diagnostics import build_action_error
+
+    driver = MagicMock()
+    driver.title = "T"
+    driver.current_url = "u"
+    driver.execute_script.return_value = []
+    msg = build_action_error(driver, _sel({"kind": "css", "value": "#a"}), "fill", 100, "not found")
+    assert "log:" not in msg
