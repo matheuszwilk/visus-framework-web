@@ -37,16 +37,21 @@ from typing import TYPE_CHECKING
 from visus.web import Engine, errors, tracing
 from visus.web import expect as _sync_expect
 from visus.web import launch as _sync_launch
+from visus.web.api.assertions import PageAssertions, verify_soft
+from visus.web.api.assertions import _soft_expect as _sync_soft_expect
 from visus.web.api.browser import Browser
 from visus.web.api.context import Context
-from visus.web.api.events import Dialog, Download, _ValueHolder
+from visus.web.api.events import ConsoleMessage, Dialog, Download, NetworkResponse, _ValueHolder
 from visus.web.api.fields import Field
 from visus.web.api.frame_locator import FrameLocator
-from visus.web.api.locator import Locator
+from visus.web.api.locator import Locator, TextArg
 from visus.web.api.page import Page
 from visus.web.rpa import _print_summary, _slug
 
 if TYPE_CHECKING:
+    import re
+    from collections.abc import Callable, Sequence
+
     from visus.web.api.assertions import LocatorAssertions
     from visus.web.api.input import Keyboard, Mouse
 
@@ -60,12 +65,15 @@ __all__ = [
     "Field",
     "Dialog",
     "Download",
+    "ConsoleMessage",
     "AsyncBrowser",
     "AsyncContext",
     "AsyncPage",
     "AsyncLocator",
     "AsyncFrameLocator",
     "AsyncLocatorAssertions",
+    "AsyncPageAssertions",
+    "AsyncNetworkResponse",
     "AsyncMouse",
     "AsyncKeyboard",
 ]
@@ -76,8 +84,19 @@ __all__ = [
 # ---------------------------------------------------------------------------
 
 
-async def launch(engine: Engine | str = Engine.CHROME, *, headless: bool = False) -> AsyncBrowser:
+async def launch(
+    engine: Engine | str = Engine.CHROME,
+    *,
+    headless: bool = False,
+    slow_mo: int = 0,
+    user_data_dir: str | None = None,
+    remote_url: str | None = None,
+) -> AsyncBrowser:
     """Launch a browser and return an AsyncBrowser handle.
+
+    Same options as the sync :func:`visus.web.launch` — *slow_mo* (ms delay per
+    operation), *user_data_dir* (persistent profile) and *remote_url* (Selenium
+    Grid / Remote WebDriver).
 
     Usage::
 
@@ -85,7 +104,17 @@ async def launch(engine: Engine | str = Engine.CHROME, *, headless: bool = False
             page = await browser.new_page()
             await page.goto("https://example.com")
     """
-    return AsyncBrowser(await asyncio.to_thread(lambda: _sync_launch(engine, headless=headless)))
+    return AsyncBrowser(
+        await asyncio.to_thread(
+            lambda: _sync_launch(
+                engine,
+                headless=headless,
+                slow_mo=slow_mo,
+                user_data_dir=user_data_dir,
+                remote_url=remote_url,
+            )
+        )
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -99,6 +128,7 @@ async def rpa(
     *,
     engine: Engine | str = Engine.CHROME,
     headless: bool = False,
+    slow_mo: int = 0,
     outdir: str | None = None,
     report: bool = True,
     summary: bool = True,
@@ -137,7 +167,7 @@ async def rpa(
     try:
         with tracing.record(str(zip_path), report=str(report_path) if report else None) as rec:
             box["rec"] = rec
-            browser = await launch(engine, headless=headless)
+            browser = await launch(engine, headless=headless, slow_mo=slow_mo)
             try:
                 yield await browser.new_page()
             finally:
@@ -168,14 +198,31 @@ async def rpa(
 # ---------------------------------------------------------------------------
 
 
-def expect(async_locator: AsyncLocator) -> AsyncLocatorAssertions:
-    """Return an AsyncLocatorAssertions object for the given AsyncLocator.
+def expect(
+    target: AsyncLocator | AsyncPage, message: str | None = None
+) -> AsyncLocatorAssertions | AsyncPageAssertions:
+    """Web-first assertion entry point (async).
 
-    Usage::
-
-        await expect(page.get_by_role("button")).to_be_visible()
+    ``await expect(locator).to_be_visible()``,
+    ``await expect(page).to_have_url(...)``. Pass *message* to prefix failures;
+    use ``expect.soft(...)`` + ``expect.verify_soft()`` for soft assertions.
     """
-    return AsyncLocatorAssertions(_sync_expect(async_locator._loc))
+    if isinstance(target, AsyncPage):
+        return AsyncPageAssertions(PageAssertions(target._p, message=message))
+    return AsyncLocatorAssertions(_sync_expect(target._loc, message))  # type: ignore[arg-type]
+
+
+def _soft_expect(
+    target: AsyncLocator | AsyncPage, message: str | None = None
+) -> AsyncLocatorAssertions | AsyncPageAssertions:
+    """Soft variant of :func:`expect` — failures are collected, not raised."""
+    if isinstance(target, AsyncPage):
+        return AsyncPageAssertions(PageAssertions(target._p, message=message, soft=True))
+    return AsyncLocatorAssertions(_sync_soft_expect(target._loc, message))  # type: ignore[arg-type]
+
+
+expect.soft = _soft_expect  # type: ignore[attr-defined]
+expect.verify_soft = verify_soft  # type: ignore[attr-defined]
 
 
 # ---------------------------------------------------------------------------
@@ -236,6 +283,22 @@ class AsyncContext:
     async def adopt_open_windows(self) -> list[AsyncPage]:
         """Adopt windows/tabs opened outside visus; return the newly-adopted pages."""
         return [AsyncPage(p) for p in await asyncio.to_thread(self._c.adopt_open_windows)]
+
+    def set_default_timeout(self, timeout: int) -> None:
+        """Default timeout (ms) for pages created after this call (in-memory)."""
+        self._c.set_default_timeout(timeout)
+
+    def set_default_navigation_timeout(self, timeout: int) -> None:
+        """Default navigation timeout (ms) for pages created after this call."""
+        self._c.set_default_navigation_timeout(timeout)
+
+    async def storage_state(self, *, path: str | None = None) -> dict:  # type: ignore[type-arg]
+        """Snapshot cookies + web storage; optionally write it to *path* as JSON."""
+        return await asyncio.to_thread(lambda: self._c.storage_state(path=path))
+
+    async def restore_storage_state(self, state: dict | str) -> None:  # type: ignore[type-arg]
+        """Apply a snapshot from :meth:`storage_state` (dict or JSON file path)."""
+        await asyncio.to_thread(lambda: self._c.restore_storage_state(state))
 
     async def cookies(self) -> list[dict]:  # type: ignore[type-arg]
         return await asyncio.to_thread(self._c.cookies)
@@ -323,6 +386,122 @@ class AsyncPage:
 
     async def pdf(self, *, path: str | None = None) -> bytes:
         return await asyncio.to_thread(lambda: self._p.pdf(path=path))
+
+    # --- default timeouts (in-memory → sync) ---
+
+    def set_default_timeout(self, timeout: int) -> None:
+        """Default timeout (ms) for actions AND navigations on this page."""
+        self._p.set_default_timeout(timeout)
+
+    def set_default_navigation_timeout(self, timeout: int) -> None:
+        """Default timeout (ms) for navigations only."""
+        self._p.set_default_navigation_timeout(timeout)
+
+    # --- web-first synchronization ---
+
+    async def wait_for_url(
+        self,
+        url: "str | re.Pattern[str] | Callable[[str], bool]",
+        *,
+        timeout: int | None = None,
+    ) -> None:
+        """Wait until the page URL matches *url* (glob, regex or predicate)."""
+        await asyncio.to_thread(lambda: self._p.wait_for_url(url, timeout=timeout))
+
+    async def wait_for_load_state(self, state: str = "load", *, timeout: int | None = None) -> None:
+        """Wait for document.readyState: 'load' or 'domcontentloaded'."""
+        await asyncio.to_thread(lambda: self._p.wait_for_load_state(state, timeout=timeout))
+
+    async def wait_for_function(
+        self, expression: str, arg: object = None, *, timeout: int | None = None
+    ) -> object:
+        """Poll a JS function until truthy; return its value."""
+        return await asyncio.to_thread(
+            lambda: self._p.wait_for_function(expression, arg, timeout=timeout)
+        )
+
+    async def wait_for_timeout(self, timeout: float) -> None:
+        """Async sleep for *timeout* milliseconds (does not block the loop)."""
+        await asyncio.sleep(timeout / 1000)
+
+    # --- network/console capture (Chromium) ---
+
+    async def network_requests(self) -> list[AsyncNetworkResponse]:
+        """Every network response captured so far (Chromium only)."""
+        recs = await asyncio.to_thread(self._p.network_requests)
+        return [AsyncNetworkResponse(r) for r in recs]
+
+    async def console_messages(self) -> list[ConsoleMessage]:
+        """Every console message captured so far (Chromium only)."""
+        return await asyncio.to_thread(self._p.console_messages)
+
+    async def wait_for_response(
+        self, url_pattern: str, *, timeout: int | None = None
+    ) -> AsyncNetworkResponse:
+        """Wait for the next response whose URL matches *url_pattern* (Chromium only)."""
+        rec = await asyncio.to_thread(
+            lambda: self._p.wait_for_response(url_pattern, timeout=timeout)
+        )
+        return AsyncNetworkResponse(rec)
+
+    @asynccontextmanager
+    async def expect_response(
+        self, url_pattern: str, *, timeout: int | None = None
+    ) -> AsyncIterator[_ValueHolder]:
+        """Run an action and capture the response it triggers (Chromium only)::
+
+            async with page.expect_response("*api/login*") as info:
+                await page.get_by_role("button", name="Sign in").click()
+            assert info.value.ok
+        """
+        p = self._p
+        marker = await asyncio.to_thread(p._delegate.network_marker)
+        holder = _ValueHolder()
+        yield holder
+        t = timeout if timeout is not None else p._defaults.action_timeout_ms
+        rec = await asyncio.to_thread(
+            lambda: p._delegate.wait_for_response(url_pattern, timeout_ms=t, from_index=marker)
+        )
+        holder._set(AsyncNetworkResponse(NetworkResponse(p._delegate, rec)))
+
+    # --- init scripts + emulation ---
+
+    async def add_init_script(self, script: str) -> None:
+        """Inject *script* before every document loaded from now on (Chromium only)."""
+        await asyncio.to_thread(lambda: self._p.add_init_script(script))
+
+    async def set_geolocation(
+        self, latitude: float, longitude: float, *, accuracy: float = 100
+    ) -> None:
+        """Override the device geolocation (Chromium only)."""
+        await asyncio.to_thread(
+            lambda: self._p.set_geolocation(latitude, longitude, accuracy=accuracy)
+        )
+
+    async def grant_permissions(
+        self, permissions: list[str], *, origin: str | None = None
+    ) -> None:
+        """Grant browser permissions, optionally per-origin (Chromium only)."""
+        await asyncio.to_thread(lambda: self._p.grant_permissions(permissions, origin=origin))
+
+    async def set_device_metrics(
+        self,
+        width: int,
+        height: int,
+        *,
+        device_scale_factor: float = 1.0,
+        mobile: bool = False,
+    ) -> None:
+        """Emulate a device viewport: size, pixel ratio, mobile flag (Chromium only)."""
+        await asyncio.to_thread(
+            lambda: self._p.set_device_metrics(
+                width, height, device_scale_factor=device_scale_factor, mobile=mobile
+            )
+        )
+
+    async def set_viewport_size(self, width: int, height: int) -> None:
+        """Resize the window so the page viewport is exactly width×height."""
+        await asyncio.to_thread(lambda: self._p.set_viewport_size(width, height))
 
     # --- zero-I/O accessors (sync, mirror the sync Page properties) ---
 
@@ -498,6 +677,34 @@ class AsyncPage:
 
 
 # ---------------------------------------------------------------------------
+# AsyncNetworkResponse
+# ---------------------------------------------------------------------------
+
+
+class AsyncNetworkResponse:
+    """Async wrapper around a captured :class:`~visus.web.api.events.NetworkResponse`."""
+
+    def __init__(self, r: NetworkResponse) -> None:
+        self._r = r
+        self.url = r.url
+        self.status = r.status
+        self.method = r.method
+        self.resource_type = r.resource_type
+
+    @property
+    def ok(self) -> bool:
+        """True for a 2xx status."""
+        return self._r.ok
+
+    async def body(self) -> str:
+        """The response body (decoded as UTF-8), fetched via CDP."""
+        return await asyncio.to_thread(self._r.body)
+
+    def __repr__(self) -> str:
+        return repr(self._r).replace("NetworkResponse", "AsyncNetworkResponse")
+
+
+# ---------------------------------------------------------------------------
 # AsyncMouse / AsyncKeyboard
 # ---------------------------------------------------------------------------
 
@@ -631,8 +838,30 @@ class AsyncLocator:
     def locator(self, selector: str, *, deep: bool = False) -> AsyncLocator:
         return AsyncLocator(self._loc.locator(selector, deep=deep))
 
-    def filter(self, *, has_text: str | None = None) -> AsyncLocator:
-        return AsyncLocator(self._loc.filter(has_text=has_text))
+    def filter(
+        self,
+        *,
+        has_text: TextArg | None = None,
+        has_not_text: TextArg | None = None,
+        has: AsyncLocator | None = None,
+        has_not: AsyncLocator | None = None,
+    ) -> AsyncLocator:
+        return AsyncLocator(
+            self._loc.filter(
+                has_text=has_text,
+                has_not_text=has_not_text,
+                has=has._loc if has is not None else None,
+                has_not=has_not._loc if has_not is not None else None,
+            )
+        )
+
+    def or_(self, other: AsyncLocator) -> AsyncLocator:
+        """Elements matching this locator OR *other* (union, document order)."""
+        return AsyncLocator(self._loc.or_(other._loc))
+
+    def and_(self, other: AsyncLocator) -> AsyncLocator:
+        """Elements matching this locator AND *other* (intersection)."""
+        return AsyncLocator(self._loc.and_(other._loc))
 
     def first(self) -> AsyncLocator:
         return AsyncLocator(self._loc.first())
@@ -647,6 +876,33 @@ class AsyncLocator:
         return AsyncFrameLocator(self._loc.frame_locator(selector))
 
     # --- async reads ---
+
+    async def wait_for(self, *, state: str = "visible", timeout: int | None = None) -> None:
+        """Wait until the locator reaches *state*: visible|hidden|attached|detached."""
+        await asyncio.to_thread(lambda: self._loc.wait_for(state=state, timeout=timeout))
+
+    async def inner_text(self) -> str:
+        return await asyncio.to_thread(self._loc.inner_text)
+
+    async def inner_html(self) -> str:
+        return await asyncio.to_thread(self._loc.inner_html)
+
+    async def all_inner_texts(self) -> list[str]:
+        return await asyncio.to_thread(self._loc.all_inner_texts)
+
+    async def bounding_box(self) -> dict[str, float] | None:
+        return await asyncio.to_thread(self._loc.bounding_box)
+
+    async def dispatch_event(
+        self, type: str, event_init: dict[str, object] | None = None
+    ) -> None:
+        await asyncio.to_thread(lambda: self._loc.dispatch_event(type, event_init))
+
+    async def scroll_into_view_if_needed(self) -> None:
+        await asyncio.to_thread(self._loc.scroll_into_view_if_needed)
+
+    async def highlight(self) -> None:
+        await asyncio.to_thread(self._loc.highlight)
 
     async def count(self) -> int:
         return await asyncio.to_thread(self._loc.count)
@@ -727,6 +983,20 @@ class AsyncLocator:
     ) -> None:
         await asyncio.to_thread(
             lambda: self._loc.press(key, timeout=timeout, backtrack=backtrack)
+        )
+
+    async def press_sequentially(
+        self,
+        text: str,
+        *,
+        delay: int = 0,
+        timeout: int | None = None,
+        backtrack: bool | int = False,
+    ) -> None:
+        await asyncio.to_thread(
+            lambda: self._loc.press_sequentially(
+                text, delay=delay, timeout=timeout, backtrack=backtrack
+            )
         )
 
     async def hover(
@@ -876,3 +1146,52 @@ class AsyncLocatorAssertions:
 
     async def to_have_count(self, count: int, *, timeout: int | None = None) -> None:
         await asyncio.to_thread(lambda: self._a.to_have_count(count, timeout=timeout))
+
+    async def to_be_attached(self, *, timeout: int | None = None) -> None:
+        await asyncio.to_thread(lambda: self._a.to_be_attached(timeout=timeout))
+
+    async def to_be_focused(self, *, timeout: int | None = None) -> None:
+        await asyncio.to_thread(lambda: self._a.to_be_focused(timeout=timeout))
+
+    async def to_be_empty(self, *, timeout: int | None = None) -> None:
+        await asyncio.to_thread(lambda: self._a.to_be_empty(timeout=timeout))
+
+    async def to_be_in_viewport(self, *, timeout: int | None = None) -> None:
+        await asyncio.to_thread(lambda: self._a.to_be_in_viewport(timeout=timeout))
+
+    async def to_have_css(self, name: str, value: TextArg, *, timeout: int | None = None) -> None:
+        await asyncio.to_thread(lambda: self._a.to_have_css(name, value, timeout=timeout))
+
+    async def to_have_id(self, id: str, *, timeout: int | None = None) -> None:
+        await asyncio.to_thread(lambda: self._a.to_have_id(id, timeout=timeout))
+
+    async def to_have_values(
+        self, values: "Sequence[str]", *, timeout: int | None = None
+    ) -> None:
+        await asyncio.to_thread(lambda: self._a.to_have_values(values, timeout=timeout))
+
+
+# ---------------------------------------------------------------------------
+# AsyncPageAssertions
+# ---------------------------------------------------------------------------
+
+
+class AsyncPageAssertions:
+    """Async wrapper around the sync PageAssertions."""
+
+    def __init__(self, sync_assertions: PageAssertions) -> None:
+        self._a = sync_assertions
+
+    @property
+    def not_(self) -> AsyncPageAssertions:
+        return AsyncPageAssertions(self._a.not_)
+
+    async def to_have_url(
+        self, url: "str | re.Pattern[str]", *, timeout: int | None = None
+    ) -> None:
+        await asyncio.to_thread(lambda: self._a.to_have_url(url, timeout=timeout))
+
+    async def to_have_title(
+        self, title: "str | re.Pattern[str]", *, timeout: int | None = None
+    ) -> None:
+        await asyncio.to_thread(lambda: self._a.to_have_title(title, timeout=timeout))

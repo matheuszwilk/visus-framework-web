@@ -13,7 +13,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from visus.web import errors
-from visus.web.api.assertions import LocatorAssertions
+from visus.web.api.assertions import LocatorAssertions, PageAssertions
 from visus.web.api.browser import Browser
 from visus.web.api.context import Context
 from visus.web.api.events import Dialog, Download
@@ -30,6 +30,7 @@ from visus.web.async_api import (
     AsyncLocatorAssertions,
     AsyncMouse,
     AsyncPage,
+    AsyncPageAssertions,
     expect,
     rpa,
 )
@@ -780,7 +781,7 @@ def test_expect_wraps_sync_expect() -> None:
         mock_expect.return_value = mock_assert
         result = expect(al)
     assert isinstance(result, AsyncLocatorAssertions)
-    mock_expect.assert_called_once_with(loc)
+    mock_expect.assert_called_once_with(loc, None)
 
 
 # ---------------------------------------------------------------------------
@@ -1178,6 +1179,7 @@ _SURFACE_PAIRS = [
     (Locator, AsyncLocator),
     (FrameLocator, AsyncFrameLocator),
     (LocatorAssertions, AsyncLocatorAssertions),
+    (PageAssertions, AsyncPageAssertions),
 ]
 
 
