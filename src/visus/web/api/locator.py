@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import re
-from typing import TYPE_CHECKING, Union
+from typing import TYPE_CHECKING, Union, cast
 
 from visus.web.api._steps import run_step
 
@@ -302,6 +302,26 @@ class Locator:
             selector=self._encoded,
         )
 
+    def press_sequentially(
+        self,
+        text: str,
+        *,
+        delay: int = 0,
+        timeout: int | None = None,
+        backtrack: bool | int = False,
+    ) -> None:
+        """Type *text* one character at a time (real key events), waiting *delay*
+        milliseconds between characters. Unlike :meth:`fill`, does not clear first."""
+        run_step(
+            self._delegate,
+            lambda: self._delegate.locator_press_sequentially(
+                self._encoded, text, delay_ms=delay, timeout_ms=self._t(timeout)
+            ),
+            backtrack,
+            action_name="press_sequentially",
+            selector=self._encoded,
+        )
+
     def press(self, key: str, *, timeout: int | None = None, backtrack: bool | int = False) -> None:
         run_step(
             self._delegate,
@@ -381,6 +401,48 @@ class Locator:
 
     def evaluate(self, expression: str, arg: object = None) -> object:
         return self._delegate.locator_evaluate(self._encoded, expression, arg)
+
+    def inner_text(self) -> str:
+        """The element's rendered text (``el.innerText`` — visible text only)."""
+        return cast(str, self.evaluate("el => el.innerText"))
+
+    def inner_html(self) -> str:
+        """The element's inner HTML markup."""
+        return cast(str, self.evaluate("el => el.innerHTML"))
+
+    def all_inner_texts(self) -> list[str]:
+        """``inner_text`` of every matching element, in document order."""
+        return [loc.inner_text() for loc in self.all()]
+
+    def bounding_box(self) -> dict[str, float] | None:
+        """The element's bounding box as ``{x, y, width, height}`` (viewport
+        coordinates), or ``None`` when the locator matches nothing."""
+        if self.count() == 0:
+            return None
+        return cast(
+            "dict[str, float]",
+            self.evaluate(
+                "el => { const r = el.getBoundingClientRect();"
+                " return {x: r.x, y: r.y, width: r.width, height: r.height}; }"
+            ),
+        )
+
+    def dispatch_event(self, type: str, event_init: dict[str, object] | None = None) -> None:
+        """Dispatch a synthetic DOM event of *type* on the element (bubbles by default)."""
+        self.evaluate(
+            "(el, a) => el.dispatchEvent(new Event(a.type,"
+            " Object.assign({bubbles: true, cancelable: true, composed: true}, a.init || {})))",
+            {"type": type, "init": event_init},
+        )
+
+    def scroll_into_view_if_needed(self) -> None:
+        """Scroll the element to the center of the viewport."""
+        self.evaluate("el => el.scrollIntoView({block: 'center', inline: 'center'})")
+
+    def highlight(self) -> None:
+        """Draw the debug highlight box around the element (remove with the next
+        highlight, or via ``page.clear_highlights()`` for the numbered overlay)."""
+        self.evaluate("el => window.__visus.highlight(el)")
 
     def screenshot(self, *, path: str | None = None) -> bytes:
         from pathlib import Path

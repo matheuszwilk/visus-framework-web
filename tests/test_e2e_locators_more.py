@@ -130,3 +130,38 @@ def test_or_and_and_composition(page):
     # and_ intersects
     assert page.locator("input").and_(page.locator(".big")).get_attribute("id") == "user"
     assert page.locator("button").and_(page.locator(".big")).count() == 0
+
+
+@pytest.mark.browser
+def test_inner_text_html_bbox_all_inner_texts(page):
+    li = page.locator("#items li").first()
+    assert li.inner_text() == "alpha"
+    assert "alpha" in page.locator("#items").inner_html()
+    assert page.locator("#items li").all_inner_texts() == ["alpha", "beta", "gamma"]
+    box = page.locator("#user").bounding_box()
+    assert box is not None and box["width"] > 0 and box["height"] > 0
+    assert page.locator("#missing").bounding_box() is None
+
+
+@pytest.mark.browser
+def test_dispatch_event_scroll_highlight(page):
+    page.evaluate(
+        "() => { window.__got = 0;"
+        " document.querySelector('#user').addEventListener('custom-ping',"
+        " () => { window.__got = 1; }); }"
+    )
+    page.locator("#user").dispatch_event("custom-ping")
+    assert page.evaluate("() => window.__got") == 1
+    page.locator("#items").scroll_into_view_if_needed()
+    page.locator("#user").highlight()
+    count_js = "() => document.querySelectorAll('[data-visus-highlight]').length"
+    assert page.evaluate(count_js) > 0
+
+
+@pytest.mark.browser
+def test_press_sequentially(page):
+    page.locator("#search").press_sequentially("abc")
+    assert page.locator("#search").input_value() == "abc"
+    page.locator("#search").clear()
+    page.locator("#search").press_sequentially("xy", delay=10)
+    assert page.locator("#search").input_value() == "xy"

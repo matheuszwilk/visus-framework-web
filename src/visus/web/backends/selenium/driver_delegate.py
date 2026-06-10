@@ -374,6 +374,28 @@ class SeleniumPageDelegate:
             ensure_bundle=self._ensure_bundle,
         )
 
+    def locator_press_sequentially(
+        self, selector: str, text: str, *, delay_ms: int, timeout_ms: int
+    ) -> None:
+        self._activate()
+        self._ensure_bundle()
+
+        def _do(el: WebElement) -> None:
+            for ch in text:
+                el.send_keys(ch)
+                if delay_ms:
+                    time.sleep(delay_ms / 1000)
+
+        run_action(
+            self._driver,
+            selector,
+            "press",
+            timeout_ms=timeout_ms,
+            force=False,
+            dispatch=_do,
+            ensure_bundle=self._ensure_bundle,
+        )
+
     def locator_focus(self, selector: str, *, timeout_ms: int) -> None:
         self._activate()
         self._ensure_bundle()
