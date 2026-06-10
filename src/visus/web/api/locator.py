@@ -168,6 +168,29 @@ class Locator:
     def _encoded(self) -> str:
         return json.dumps(list(self._steps))
 
+    def wait_for(self, *, state: str = "visible", timeout: int | None = None) -> None:
+        """Wait until the locator reaches *state*: ``visible`` (default),
+        ``hidden``, ``attached`` (≥1 match) or ``detached`` (0 matches).
+
+        Raises :class:`~visus.web.errors.VisusTimeoutError` on timeout.
+        """
+        if state not in ("visible", "hidden", "attached", "detached"):
+            raise ValueError(
+                f"unknown state {state!r}; use visible|hidden|attached|detached"
+            )
+        from visus.web import errors
+
+        t = timeout if timeout is not None else self._defaults.action_timeout_ms
+        try:
+            self._delegate.expect_poll(self._encoded, state, None, is_not=False, timeout_ms=t)
+        except AssertionError as exc:
+            from visus.web.backends.selenium._diagnostics import describe_target
+
+            raise errors.VisusTimeoutError(
+                f"wait_for: {describe_target(self._encoded)} did not become {state}"
+                f" within {t}ms"
+            ) from exc
+
     # --- reads (resolve against the live page) ---
     def count(self) -> int:
         return self._delegate.locator_count(self._encoded)

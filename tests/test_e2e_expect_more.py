@@ -39,3 +39,23 @@ def test_to_be_disabled_and_editable(page):
     expect(page.locator("#dis")).to_be_disabled()
     expect(page.locator("#user")).to_be_editable()
     expect(page.locator("#ro")).not_.to_be_editable()
+
+
+@pytest.mark.browser
+def test_locator_wait_for_states(page):
+    from visus.web import errors
+
+    page.locator("#user").wait_for()  # default: visible
+    page.locator("#user").wait_for(state="attached")
+    page.locator("#missing").wait_for(state="detached")
+    page.locator("#missing").wait_for(state="hidden")  # absent counts as hidden
+    with pytest.raises(errors.VisusTimeoutError):
+        page.locator("#missing").wait_for(state="visible", timeout=400)
+    with pytest.raises(ValueError):
+        page.locator("#user").wait_for(state="bogus")
+
+
+@pytest.mark.browser
+def test_expect_to_be_attached(page):
+    expect(page.locator("#user")).to_be_attached()
+    expect(page.locator("#missing")).not_.to_be_attached()

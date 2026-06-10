@@ -43,6 +43,10 @@ def _evaluate(
     if matcher == "count":
         n = len(els)
         return (n == cast(dict[str, object], arg)["count"], n)
+    if matcher == "attached":
+        return (len(els) > 0, f"{len(els)} element(s)")
+    if matcher == "detached":
+        return (len(els) == 0, f"{len(els)} element(s)")
     if matcher in _SINGLE_STATES:
         if not els:
             # absent element: 'hidden' is satisfied, everything else is not

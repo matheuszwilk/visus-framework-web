@@ -75,6 +75,9 @@ class LocatorAssertions:
     def to_have_role(self, role: str, *, timeout: int | None = None) -> None:
         self._poll("role", {"value": role}, timeout)
 
+    def to_be_attached(self, *, timeout: int | None = None) -> None:
+        self._poll("attached", None, timeout)
+
     def to_be_disabled(self, *, timeout: int | None = None) -> None:
         self._poll("disabled", None, timeout)
 
