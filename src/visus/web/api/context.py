@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import replace
+
 from visus.web.api.page import Page
 from visus.web.backends.base import ContextDelegate
 from visus.web.config import Defaults
@@ -12,6 +14,17 @@ class Context:
 
     def new_page(self) -> Page:
         return Page(self._delegate.new_page(), self._defaults)
+
+    def set_default_timeout(self, timeout: int) -> None:
+        """Default timeout (ms) for actions and navigations on pages created
+        by this context *after* this call."""
+        self._defaults = replace(
+            self._defaults, action_timeout_ms=timeout, navigation_timeout_ms=timeout
+        )
+
+    def set_default_navigation_timeout(self, timeout: int) -> None:
+        """Default navigation timeout (ms) for pages created after this call."""
+        self._defaults = replace(self._defaults, navigation_timeout_ms=timeout)
 
     @property
     def pages(self) -> list[Page]:

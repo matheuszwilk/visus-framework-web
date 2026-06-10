@@ -4,6 +4,7 @@ import fnmatch
 import re
 from collections.abc import Callable, Generator
 from contextlib import contextmanager
+from dataclasses import replace
 from pathlib import Path
 from time import monotonic, sleep
 from typing import TYPE_CHECKING, Any, cast
@@ -76,6 +77,22 @@ class Page:
 
     def close(self) -> None:
         self._delegate.close()
+
+    # --- default timeouts (page-level overrides) ---
+
+    def set_default_timeout(self, timeout: int) -> None:
+        """Default timeout (ms) for actions AND navigations on this page.
+
+        Locators created *after* this call pick up the new default; per-call
+        ``timeout=`` still wins. Call it right after creating the page.
+        """
+        self._defaults = replace(
+            self._defaults, action_timeout_ms=timeout, navigation_timeout_ms=timeout
+        )
+
+    def set_default_navigation_timeout(self, timeout: int) -> None:
+        """Default timeout (ms) for navigations only (``goto``/``reload``/history)."""
+        self._defaults = replace(self._defaults, navigation_timeout_ms=timeout)
 
     # --- web-first synchronization ---
 
