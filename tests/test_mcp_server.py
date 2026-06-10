@@ -1,4 +1,4 @@
-"""tests/test_mcp_server.py — MCP server registration smoke test (no browser required).
+﻿"""tests/test_mcp_server.py â€” MCP server registration smoke test (no browser required).
 
 Verifies that the FastMCP app registers all expected tool names without launching a browser.
 """
@@ -12,7 +12,7 @@ import pytest
 
 def _get_tool_names() -> list[str]:
     """Import the server module and return registered tool names (synchronous)."""
-    # Import the module — the @mcp.tool() decorators run at import time
+    # Import the module â€” the @mcp.tool() decorators run at import time
     server = importlib.import_module("visus.web.mcp.server")
     mcp_app = server.mcp
     # _tool_manager.list_tools() is synchronous
@@ -65,6 +65,9 @@ _EXPECTED_TOOLS = [
     "browser_set_tab_follow",
     # Dialogs
     "browser_handle_dialog",
+    # Network / console capture
+    "browser_network_requests",
+    "browser_console_messages",
     # Cookies
     "browser_get_cookies",
     "browser_add_cookies",
@@ -95,7 +98,7 @@ def test_at_least_35_tools_registered() -> None:
     """Ensure at minimum 35 tools are registered (guards against partial implementations)."""
     registered = _get_tool_names()
     assert len(registered) >= 35, (
-        f"Expected ≥35 tools, found {len(registered)}: {sorted(registered)}"
+        f"Expected â‰¥35 tools, found {len(registered)}: {sorted(registered)}"
     )
 
 
@@ -127,3 +130,4 @@ def test_tool_registered(tool_name: str) -> None:
     assert tool_name in registered, (
         f"Tool {tool_name!r} not found. Registered: {sorted(registered)}"
     )
+
