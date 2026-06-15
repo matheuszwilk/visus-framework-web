@@ -25,6 +25,14 @@ def build_options(*, headless: bool, download_dir: str, user_data_dir: str) -> O
     # Performance log feeds page.network_requests(); browser log feeds
     # page.console_messages(). Negligible overhead when never drained.
     opts.set_capability("goog:loggingPrefs", {"performance": "ALL", "browser": "ALL"})
+    # msedgedriver (a Chromium fork) reads the vendor-prefixed ms:loggingPrefs for
+    # the DevTools performance log NetworkCapture drains; both capabilities coexist.
+    # perfLoggingPrefs enables CDP Network.* events. Must be set at session creation.
+    opts.set_capability("ms:loggingPrefs", {"performance": "ALL"})
+    opts.add_experimental_option(
+        "perfLoggingPrefs",
+        {"enableNetwork": True, "enablePage": False},
+    )
     return opts
 
 
